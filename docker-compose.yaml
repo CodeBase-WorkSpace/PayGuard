@@ -1,41 +1,63 @@
 name: ${COMPOSE_PROJECT_NAME}
 
 services:
-  oracle:
-    image: gvenzl/oracle-free:23-slim-faststart
-    container_name: payguard-oracle
+  oracle-wallet:
+    image: ${ORACLE_IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}-oracle-wallet
     ports:
-      - "${ORACLE_PORT}:1521"
+      - "${WALLET_ORACLE_PORT}:1521"
     environment:
-      ORACLE_PASSWORD: ${ORACLE_PASSWORD}
-      APP_USER: ${ORACLE_APP_USER}
-      APP_PASSWORD: ${ORACLE_APP_PASSWORD}
+      ORACLE_PASSWORD: ${WALLET_ORACLE_SYSTEM_PASSWORD}
+      APP_USER: ${WALLET_ORACLE_APP_USER}
+      APP_PASSWORD: ${WALLET_ORACLE_APP_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 30s
+      retries: 20
+      start_period: 45s
     volumes:
-      - oracle_data:/opt/oracle/oradata
+      - oracle_wallet_data:/opt/oracle/oradata
 
-  redis:
-    image: redis:7-alpine
-    container_name: payguard-redis
+  oracle-loan:
+    image: ${ORACLE_IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}-oracle-loan
     ports:
-      - "${REDIS_PORT}:6379"
+      - "${LOAN_ORACLE_PORT}:1521"
+    environment:
+      ORACLE_PASSWORD: ${LOAN_ORACLE_SYSTEM_PASSWORD}
+      APP_USER: ${LOAN_ORACLE_APP_USER}
+      APP_PASSWORD: ${LOAN_ORACLE_APP_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
+      test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
     volumes:
-      - redis_data:/data
+      - oracle_loan_data:/opt/oracle/oradata
+
+  oracle-collateral:
+    image: ${ORACLE_IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}-oracle-collateral
+    ports:
+      - "${COLLATERAL_ORACLE_PORT}:1521"
+    environment:
+      ORACLE_PASSWORD: ${COLLATERAL_ORACLE_SYSTEM_PASSWORD}
+      APP_USER: ${COLLATERAL_ORACLE_APP_USER}
+      APP_PASSWORD: ${COLLATERAL_ORACLE_APP_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+    volumes:
+      - oracle_collateral_data:/opt/oracle/oradata
 
   kafka:
-    image: apache/kafka:latest
-    container_name: payguard-kafka
+    image: ${KAFKA_IMAGE}
+    container_name: ${COMPOSE_PROJECT_NAME}-kafka
     ports:
       - "${KAFKA_PORT}:9092"
     environment:
@@ -57,12 +79,61 @@ services:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 10
+      start_period: 20s
     volumes:
       - kafka_data:/tmp/kraft-combined-logs
 
+  wallet-service:
+    build:
+      context: .
+      dockerfile: payguard-wallet-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}-wallet-service
+    ports:
+      - "${WALLET_SERVICE_PORT}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-wallet:1521/FREE
+      SPRING_DATASOURCE_USERNAME: ${WALLET_ORACLE_APP_USER}
+      SPRING_DATASOURCE_PASSWORD: ${WALLET_ORACLE_APP_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      oracle-wallet: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  loan-service:
+    build:
+      context: .
+      dockerfile: payguard-loan-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}-loan-service
+    ports:
+      - "${LOAN_SERVICE_PORT}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-loan:1521/FREE
+      SPRING_DATASOURCE_USERNAME: ${LOAN_ORACLE_APP_USER}
+      SPRING_DATASOURCE_PASSWORD: ${LOAN_ORACLE_APP_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      oracle-loan: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  collateral-service:
+    build:
+      context: .
+      dockerfile: payguard-collateral-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME}-collateral-service
+    ports:
+      - "${COLLATERAL_SERVICE_PORT}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-collateral:1521/FREE
+      SPRING_DATASOURCE_USERNAME: ${COLLATERAL_ORACLE_APP_USER}
+      SPRING_DATASOURCE_PASSWORD: ${COLLATERAL_ORACLE_APP_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      oracle-collateral: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
 volumes:
-  oracle_data:
-  redis_data:
+  oracle_wallet_data:
+  oracle_loan_data:
+  oracle_collateral_data:
   kafka_data:
