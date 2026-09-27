@@ -33,21 +33,11 @@ jobs:
           ./mvnw help:effective-pom -pl payguard-wallet-service \
             | grep -A8 -B2 spring-boot-maven-plugin
 
-      # Spring Boot Buildpacks approach for highly optimized container images
       - name: Build Wallet Service Image
-        run: >
-          ./mvnw -pl payguard-wallet-service
-          org.springframework.boot:spring-boot-maven-plugin:4.0.1:build-image
-          -Dspring-boot.build-image.imageName=payguard/wallet-service:latest
+        run: docker build -f payguard-wallet-service/Dockerfile -t payguard/wallet-service:latest .
 
       - name: Build Loan Service Image
-        run: >
-          ./mvnw -pl payguard-loan-service
-          org.springframework.boot:spring-boot-maven-plugin:4.0.1:build-image
-          -Dspring-boot.build-image.imageName=payguard/loan-service:latest
+        run: docker build -f payguard-loan-service/Dockerfile -t payguard/loan-service:latest .
 
       - name: Build Collateral Service Image
-        run: >
-          ./mvnw -pl payguard-collateral-service
-          org.springframework.boot:spring-boot-maven-plugin:4.0.1:build-image
-          -Dspring-boot.build-image.imageName=payguard/collateral-service:latest
+        run: docker build -f payguard-collateral-service/Dockerfile -t payguard/collateral-service:latest .
