@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://payguard.dev/events/otp-event-v1.schema.json",
+  "title": "PayGuard OTP event v1",
+  "type": "object",
+  "required": ["type", "challengeId", "userId", "purpose", "channel", "occurredAt"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["otp.challenge-issued", "otp.verified", "otp.failed", "otp.locked-out"]
+    },
+    "challengeId": {"type": "string", "format": "uuid"},
+    "userId": {"type": "string", "minLength": 1},
+    "purpose": {"type": "string"},
+    "channel": {"type": "string"},
+    "result": {"type": ["string", "null"]},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "reason": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}
