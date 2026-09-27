@@ -1,9 +1,13 @@
 package domain;
 
-/**
- * Marker interface identifying a type as a Domain-Driven Design Value Object.
- *
- * <p>Deliberately empty — immutability and structural equality/hashCode are guaranteed by
- * implementing this interface via a {@code record}, not by inheritance.
- */
-public interface ValueObject {}
+/** Identifies a domain value object and defines its value-based equality contract. */
+@FunctionalInterface
+public interface ValueObject {
+  /**
+   * Returns whether this value object represents the same value as {@code other}.
+   *
+   * <p>Implementations should compare all components that define the value object and should not
+   * compare object identity.
+   */
+  boolean sameValueAs(ValueObject other);
+}

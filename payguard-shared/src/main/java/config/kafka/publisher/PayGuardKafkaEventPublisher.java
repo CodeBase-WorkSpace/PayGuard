@@ -2,8 +2,8 @@ package config.kafka.publisher;
 
 import config.kafka.event.EventPayload;
 import config.kafka.event.PayGuardEvent;
+import domain.DomainValidation;
 import exception.InvalidKafkaEventException;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
@@ -13,7 +13,7 @@ public final class PayGuardKafkaEventPublisher {
   private final KafkaTemplate<String, Object> kafkaTemplate;
 
   public PayGuardKafkaEventPublisher(KafkaTemplate<String, Object> kafkaTemplate) {
-    this.kafkaTemplate = Objects.requireNonNull(kafkaTemplate, "kafkaTemplate must not be null");
+    this.kafkaTemplate = DomainValidation.requireNonNull(kafkaTemplate, "kafkaTemplate");
   }
 
   public CompletableFuture<SendResult<String, Object>> publish(
@@ -21,7 +21,7 @@ public final class PayGuardKafkaEventPublisher {
     if (topic == null || topic.isBlank()) {
       throw new InvalidKafkaEventException("topic must not be blank");
     }
-    Objects.requireNonNull(event, "event must not be null");
+    DomainValidation.requireNonNull(event, "event");
     return kafkaTemplate.send(topic, event.aggregateId(), event);
   }
 }

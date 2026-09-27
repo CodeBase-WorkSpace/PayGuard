@@ -22,27 +22,37 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Detect local act runtime
+        id: runtime
+        shell: bash
+        run: |
+          if [ "${ACT:-}" = "true" ]; then
+            echo "under_act=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "under_act=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Initialize CodeQL
-        if: ${{ env.ACT != 'true' }}
+        if: ${{ steps.runtime.outputs.under_act != 'true' }}
         uses: github/codeql-action/init@v3
         with:
           languages: java-kotlin
           build-mode: autobuild
 
       - name: Autobuild
-        if: ${{ env.ACT != 'true' }}
+        if: ${{ steps.runtime.outputs.under_act != 'true' }}
         uses: github/codeql-action/autobuild@v3
 
       - name: Analyze
-        if: ${{ env.ACT != 'true' }}
+        if: ${{ steps.runtime.outputs.under_act != 'true' }}
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:java-kotlin"
 
       - name: Validate CodeQL workflow under act
-        if: ${{ env.ACT == 'true' }}
+        if: ${{ steps.runtime.outputs.under_act == 'true' }}
         run: |
           test -f .github/workflows/codeql.yml
           test -f pom.xml

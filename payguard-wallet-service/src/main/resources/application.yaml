@@ -1,3 +1,10 @@
 spring:
   application:
-    name: demo
+    name: wallet-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: oracle.jdbc.OracleDriver
+  jooq:
+    sql-dialect: default
