@@ -66,9 +66,9 @@ It is not a payment-card switch or a full core-banking platform. The scope is in
 
 | Service | Responsibility | Persistence | Current State |
 |---|---|---|---|
-| `wallet-service` | Account balances, double-entry ledger, holds/captures | PostgreSQL/Oracle via **jOOQ** (append-only, no ORM overhead) | In development |
-| `loan-service` | Loan lifecycle, amortization schedules, repayments | Oracle via JPA/Hibernate | In development |
-| `collateral-service` | Collateral locking, price valuation, LTV monitoring, liquidation | Oracle via JPA/Hibernate | In development |
+| `wallet-service` | Account balances, double-entry ledger, holds/captures | Dedicated Oracle database via **jOOQ** (append-only, no ORM overhead) | In development |
+| `loan-service` | Loan lifecycle, amortization schedules, repayments | Dedicated Oracle database via JPA/Hibernate | In development |
+| `collateral-service` | Collateral locking, price valuation, LTV monitoring, liquidation | Dedicated Oracle database via JPA/Hibernate | In development |
 | `api-gateway` | Single entry point; REST from clients, gRPC to internal services | — | Planned |
 
 > `wallet-service` deliberately uses jOOQ instead of JPA: a ledger is append-only, and jOOQ gives explicit control over `INSERT`-only SQL with no risk of an accidental `UPDATE` slipping in through dirty-checking. `loan-service` and `collateral-service` manage mutable, CRUD-shaped state, where JPA is a better fit.
@@ -127,7 +127,7 @@ flowchart LR
 ### Dependency Rules
 
 - Domain code has no Spring, persistence, or HTTP dependencies — invariants (e.g. debit = credit) are testable without a running application.
-- Each service owns its own database schema; no service queries another's tables directly.
+- Each service owns its own Oracle instance, credentials, volume, and schema; no service queries another's tables directly.
 - Cross-service calls happen only through the declared client ports (`WalletServiceClient`, `LoanServiceClient`, `CollateralServiceClient`), each with a REST adapter today and a gRPC adapter available for the gateway path.
 - Dependencies point inward, toward the domain core.
 
@@ -183,16 +183,26 @@ cd payguard
 Create a `.env` file in the repository root:
 
 ```env
-# Oracle
+# Independent Oracle databases (copy `.env.example` to `.env` and set secrets)
 ORACLE_IMAGE=gvenzl/oracle-free:23-slim-faststart
-ORACLE_HOST_PORT=1521
-ORACLE_PASSWORD=change-me-for-local-development
-
-# Redis
-REDIS_IMAGE=redis:7-alpine
-REDIS_HOST_PORT=6379
+WALLET_ORACLE_PORT=1521
+LOAN_ORACLE_PORT=1522
+COLLATERAL_ORACLE_PORT=1523
+WALLET_ORACLE_SYSTEM_PASSWORD=change-wallet-system-password
+LOAN_ORACLE_SYSTEM_PASSWORD=change-loan-system-password
+COLLATERAL_ORACLE_SYSTEM_PASSWORD=change-collateral-system-password
+WALLET_ORACLE_APP_USER=payguard_wallet
+LOAN_ORACLE_APP_USER=payguard_loan
+COLLATERAL_ORACLE_APP_USER=payguard_collateral
+WALLET_ORACLE_APP_PASSWORD=change-wallet-app-password
+LOAN_ORACLE_APP_PASSWORD=change-loan-app-password
+COLLATERAL_ORACLE_APP_PASSWORD=change-collateral-app-password
+WALLET_ORACLE_JDBC_URL=jdbc:oracle:thin:@localhost:1521/FREE
+LOAN_ORACLE_JDBC_URL=jdbc:oracle:thin:@localhost:1522/FREE
+COLLATERAL_ORACLE_JDBC_URL=jdbc:oracle:thin:@localhost:1523/FREE
 
 # Kafka (KRaft mode — no Zookeeper)
+KAFKA_IMAGE=apache/kafka:latest
 KAFKA_CLUSTER_ID=replace-with-a-generated-cluster-id
 
 # Per-service ports
