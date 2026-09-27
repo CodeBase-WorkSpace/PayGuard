@@ -1,3 +1,27 @@
 spring:
   application:
     name: payguard-api-gateway
+
+payguard:
+  gateway:
+    security:
+      enabled: ${PAYGUARD_GATEWAY_SECURITY_ENABLED:false}
+    wallet:
+      target: ${WALLET_GRPC_TARGET:localhost:9091}
+      plaintext: ${WALLET_GRPC_PLAINTEXT:true}
+    loan:
+      target: ${LOAN_GRPC_TARGET:localhost:9092}
+      plaintext: ${LOAN_GRPC_PLAINTEXT:true}
+    collateral:
+      target: ${COLLATERAL_GRPC_TARGET:localhost:9093}
+      plaintext: ${COLLATERAL_GRPC_PLAINTEXT:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true

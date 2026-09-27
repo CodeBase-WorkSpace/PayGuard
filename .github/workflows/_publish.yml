@@ -23,27 +23,21 @@ jobs:
         # Tests are skipped because they already passed in the _quality workflow
         run: ./mvnw clean package -DskipTests
 
+      - name: Install Maven Modules for Image Builds
+        # Image builds run as separate Maven invocations and need reactor artifacts in the local repository.
+        run: ./mvnw -DskipTests -Dpmd.skip=true -Dspotbugs.skip=true install
+
       - name: Verify Spring Boot plugin resolution
         run: |
           ./mvnw -version
           ./mvnw help:effective-pom -pl payguard-wallet-service \
             | grep -A8 -B2 spring-boot-maven-plugin
 
-      # Spring Boot Buildpacks approach for highly optimized container images
       - name: Build Wallet Service Image
-        run: >
-          ./mvnw -pl payguard-wallet-service
-          org.springframework.boot:spring-boot-maven-plugin:4.0.1:build-image
-          -Dspring-boot.build-image.imageName=payguard/wallet-service:latest
+        run: docker build -f payguard-wallet-service/Dockerfile -t payguard/wallet-service:latest .
 
       - name: Build Loan Service Image
-        run: >
-          ./mvnw -pl payguard-loan-service
-          org.springframework.boot:spring-boot-maven-plugin:4.0.1:build-image
-          -Dspring-boot.build-image.imageName=payguard/loan-service:latest
+        run: docker build -f payguard-loan-service/Dockerfile -t payguard/loan-service:latest .
 
       - name: Build Collateral Service Image
-        run: >
-          ./mvnw -pl payguard-collateral-service
-          org.springframework.boot:spring-boot-maven-plugin:4.0.1:build-image
-          -Dspring-boot.build-image.imageName=payguard/collateral-service:latest
+        run: docker build -f payguard-collateral-service/Dockerfile -t payguard/collateral-service:latest .

@@ -1,9 +1,9 @@
 package config.kafka.event;
 
+import domain.DomainValidation;
 import exception.InvalidKafkaEventException;
 import java.time.Instant;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 
 public record PayGuardEvent<T>(
@@ -21,16 +21,16 @@ public record PayGuardEvent<T>(
     Map<String, String> metadata) {
 
   public PayGuardEvent {
-    Objects.requireNonNull(eventId, "eventId must not be null");
+    DomainValidation.requireNonNull(eventId, "eventId");
     requireText(eventType, "eventType must not be blank");
     requireText(aggregateType, "aggregateType must not be blank");
     requireText(aggregateId, "aggregateId must not be blank");
     requireText(idempotencyKey, "idempotencyKey must not be blank");
-    Objects.requireNonNull(occurredAt, "occurredAt must not be null");
+    DomainValidation.requireNonNull(occurredAt, "occurredAt");
     requireText(producer, "producer must not be blank");
-    Objects.requireNonNull(payload, "payload must not be null");
+    DomainValidation.requireNonNull(payload, "payload");
     if (schemaVersion <= 0) {
-      throw new IllegalArgumentException("schemaVersion must be positive");
+      throw new InvalidKafkaEventException("schemaVersion must be positive");
     }
     metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
   }
