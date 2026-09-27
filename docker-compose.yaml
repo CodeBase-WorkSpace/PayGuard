@@ -19,9 +19,9 @@ services:
     volumes:
       - oracle_wallet_data:/opt/oracle/oradata
 
-  oracle-loan:
-    image: ${ORACLE_IMAGE}
-    container_name: ${COMPOSE_PROJECT_NAME}-oracle-loan
+  redis:
+    image: redis:8-alpine
+    container_name: payguard-redis
     ports:
       - "${LOAN_ORACLE_PORT}:1521"
     environment:
