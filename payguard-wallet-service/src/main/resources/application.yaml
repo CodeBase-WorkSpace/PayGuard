@@ -2,9 +2,9 @@ spring:
   application:
     name: wallet-service
   datasource:
-    url: jdbc:oracle:thin:@localhost:${ORACLE_PORT:1521}/FREE
-    username: ${ORACLE_APP_USER:payguard_user}
-    password: ${ORACLE_APP_PASSWORD:payguard_pass}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: oracle.jdbc.OracleDriver
   jooq:
     sql-dialect: default
