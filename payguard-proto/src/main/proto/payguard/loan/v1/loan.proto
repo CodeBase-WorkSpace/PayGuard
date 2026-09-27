@@ -12,6 +12,9 @@ service LoanService {
   rpc GetLoan(GetLoanRequest) returns (LoanResponse);
   rpc ApproveLoan(LoanCommandRequest) returns (LoanResponse);
   rpc CreateRepayment(RepaymentRequest) returns (RepaymentResponse);
+  rpc OriginateLoan(OriginateLoanRequest) returns (LoanResponse);
+  rpc GetSchedule(GetLoanRequest) returns (ScheduleResponse);
+  rpc DisputeLoan(LoanCommandRequest) returns (LoanResponse);
 }
 
 message GetLoanRequest {
@@ -43,4 +46,23 @@ message RepaymentResponse {
   string loan_id = 2;
   string status = 3;
   payguard.common.v1.Money applied_amount = 4;
+}
+
+message OriginateLoanRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string borrower_id = 2;
+  string collateral_id = 3;
+  payguard.common.v1.Money principal = 4;
+  string annual_rate = 5;
+  int32 term_months = 6;
+}
+
+message ScheduleResponse { repeated Installment installments = 1; }
+message Installment {
+  string installment_id = 1;
+  int32 number = 2;
+  string due_date = 3;
+  payguard.common.v1.Money principal = 4;
+  payguard.common.v1.Money interest = 5;
+  payguard.common.v1.Money paid = 6;
 }
