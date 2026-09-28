@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package payguard.common.v1;
+
+option java_multiple_files = true;
+option java_package = "dev.amg.payguard.proto.common.v1";
+option java_outer_classname = "CommonProto";
+
+message RequestContext {
+  string correlation_id = 1;
+  string causation_id = 2;
+  string organization_id = 3;
+  string subject_id = 4;
+  repeated string roles = 5;
+  string idempotency_key = 6;
+}
+
+message Money {
+  string amount = 1;
+  string currency = 2;
+}
+
+message PageRequest {
+  int32 page = 1;
+  int32 size = 2;
+  string sort = 3;
+  string direction = 4;
+}
+
+message PageInfo {
+  int32 page = 1;
+  int32 size = 2;
+  int64 total_elements = 3;
+  int32 total_pages = 4;
+}
+
+message Empty {}
+
+message OperationResult {
+  string id = 1;
+  string status = 2;
+  string message = 3;
+}

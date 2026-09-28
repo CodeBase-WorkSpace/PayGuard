@@ -44,7 +44,7 @@ public abstract class DomainException extends RuntimeException {
 
   /** Absolute URI identifying the error type for API documentation. */
   public URI getTypeUri() {
-    final String BASE_ERROR_URI = "https://api.synapse.com/errors/";
+    final String BASE_ERROR_URI = "https://api.payguard.com/errors/";
     return URI.create(BASE_ERROR_URI + getErrorCode().toLowerCase(Locale.ROOT).replace("_", "-"));
   }
 }

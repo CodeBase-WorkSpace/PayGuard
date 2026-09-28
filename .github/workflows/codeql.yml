@@ -26,23 +26,23 @@ jobs:
 
       - name: Initialize CodeQL
         if: ${{ env.ACT != 'true' }}
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
           build-mode: autobuild
 
       - name: Autobuild
         if: ${{ env.ACT != 'true' }}
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Analyze
         if: ${{ env.ACT != 'true' }}
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:java-kotlin"
 
       - name: Validate CodeQL workflow under act
-        if: ${{ env.ACT == 'true' }}
+        if: ${{ steps.runtime.outputs.under_act == 'true' }}
         run: |
           test -f .github/workflows/codeql.yml
           test -f pom.xml

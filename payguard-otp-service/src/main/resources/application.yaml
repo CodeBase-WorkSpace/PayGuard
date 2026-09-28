@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: payguard-otp-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: oracle.jdbc.OracleDriver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+server:
+  port: ${OTP_SERVICE_PORT:8084}
+
+otp:
+  security:
+    pepper: ${OTP_SECURITY_PEPPER:change-this-otp-pepper-in-production-32-chars}
+  delivery:
+    mode: ${OTP_DELIVERY_MODE:mock}
+  challenge:
+    random-ttl: ${OTP_RANDOM_TTL:PT5M}
+    totp-ttl: ${OTP_TOTP_TTL:PT30S}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+  rate-limit:
+    max-issues: ${OTP_MAX_ISSUES:3}
+    max-verifications: ${OTP_MAX_VERIFICATIONS:20}
+    window: ${OTP_RATE_LIMIT_WINDOW:PT15M}
+  step-up-token:
+    ttl: ${OTP_STEP_UP_TOKEN_TTL:PT3M}
+  audit:
+    retention: ${OTP_AUDIT_RETENTION:PT2160H}
+  kafka:
+    topic: ${OTP_KAFKA_TOPIC:otp.events.v1}

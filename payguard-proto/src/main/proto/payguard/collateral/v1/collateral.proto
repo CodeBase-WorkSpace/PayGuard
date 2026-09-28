@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package payguard.collateral.v1;
+
+import "payguard/common/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "dev.amg.payguard.proto.collateral.v1";
+option java_outer_classname = "CollateralProto";
+
+service CollateralService {
+  rpc GetPosition(GetPositionRequest) returns (CollateralResponse);
+  rpc RefreshPrices(RefreshPricesRequest) returns (RefreshPricesResponse);
+  rpc LockCollateral(LockCollateralRequest) returns (CollateralResponse);
+  rpc ReleaseCollateral(GetPositionRequest) returns (CollateralResponse);
+}
+
+message GetPositionRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string position_id = 2;
+}
+
+message RefreshPricesRequest {
+  payguard.common.v1.RequestContext context = 1;
+}
+
+message CollateralResponse {
+  string position_id = 1;
+  string organization_id = 2;
+  string loan_id = 3;
+  string status = 4;
+  string ltv = 5;
+  payguard.common.v1.Money market_value = 6;
+}
+
+message RefreshPricesResponse {
+  int32 updated_positions = 1;
+  string status = 2;
+}
+
+message LockCollateralRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string owner_id = 2;
+  string loan_id = 3;
+  payguard.common.v1.Money amount = 4;
+  string warning_ltv = 5;
+  string margin_ltv = 6;
+  string liquidation_ltv = 7;
+}
