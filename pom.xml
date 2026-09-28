@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>dev.amg.payguard</groupId>
-    <artifactId>payguard</artifactId>
+    <artifactId>payguard-parent</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
@@ -18,12 +18,12 @@
         <module>payguard-wallet-service</module>
         <module>payguard-loan-service</module>
         <module>payguard-collateral-service</module>
+        <module>payguard-otp-service</module>
     </modules>
 
     <properties>
         <java.version>25</java.version>
-        <maven.compiler.source>25</maven.compiler.source>
-        <maven.compiler.target>25</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>4.1.1</spring-boot.version>
         <grpc.version>1.84.0</grpc.version>
@@ -49,6 +49,16 @@
                 <scope>import</scope>
             </dependency>
             <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java-util</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.oracle.database.jdbc</groupId>
                 <artifactId>ojdbc11</artifactId>
                 <version>${oracle.driver.version}</version>
@@ -61,6 +71,13 @@
         </dependencies>
     </dependencyManagement>
     <build>
+        <extensions>
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>${os.maven.plugin.version}</version>
+            </extension>
+        </extensions>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
@@ -145,6 +162,9 @@
                     <targetJdk>21</targetJdk>
                     <printFailingErrors>true</printFailingErrors>
                     <failOnViolation>true</failOnViolation>
+                    <excludeRoots>
+                        <excludeRoot>${project.build.directory}/generated-sources</excludeRoot>
+                    </excludeRoots>
 
                     <rulesets>
                         <ruleset>category/java/errorprone.xml</ruleset>

@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package payguard.wallet.v1;
+
+import "payguard/common/v1/common.proto";
+
+option java_multiple_files = true;
+option java_package = "dev.amg.payguard.proto.wallet.v1";
+option java_outer_classname = "WalletProto";
+
+service WalletService {
+  rpc CreateWallet(CreateWalletRequest) returns (WalletResponse);
+  rpc GetWallet(GetWalletRequest) returns (WalletResponse);
+  rpc GetBalance(GetWalletRequest) returns (BalanceResponse);
+  rpc ListTransactions(ListTransactionsRequest) returns (TransactionPageResponse);
+  rpc Credit(CreditRequest) returns (FinancialOperationResponse);
+  rpc Debit(DebitRequest) returns (FinancialOperationResponse);
+  rpc Transfer(TransferRequest) returns (FinancialOperationResponse);
+  rpc Refund(ReferenceOperationRequest) returns (FinancialOperationResponse);
+  rpc Reverse(ReferenceOperationRequest) returns (FinancialOperationResponse);
+  rpc CreateReservation(ReservationRequest) returns (ReservationResponse);
+  rpc CaptureReservation(ReferenceOperationRequest) returns (FinancialOperationResponse);
+  rpc ReleaseReservation(ReferenceOperationRequest) returns (FinancialOperationResponse);
+}
+
+message CreateWalletRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string external_customer_id = 2;
+  string currency = 3;
+}
+
+message GetWalletRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string wallet_id = 2;
+}
+
+message ListTransactionsRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string wallet_id = 2;
+  payguard.common.v1.PageRequest page = 3;
+  string transaction_type = 4;
+}
+
+message CreditRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string wallet_id = 2;
+  payguard.common.v1.Money amount = 3;
+  string transaction_type = 4;
+  string reference_id = 5;
+  string description = 6;
+}
+
+message DebitRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string wallet_id = 2;
+  payguard.common.v1.Money amount = 3;
+  string transaction_type = 4;
+  string reference_id = 5;
+  string description = 6;
+}
+
+message TransferRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string source_wallet_id = 2;
+  string destination_wallet_id = 3;
+  payguard.common.v1.Money amount = 4;
+  string reference_id = 5;
+  string description = 6;
+}
+
+message ReferenceOperationRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string transaction_id = 2;
+  string reference_id = 3;
+  string description = 4;
+}
+
+message ReservationRequest {
+  payguard.common.v1.RequestContext context = 1;
+  string wallet_id = 2;
+  payguard.common.v1.Money amount = 3;
+  string reference_id = 4;
+  string description = 5;
+  int64 expires_at_epoch_seconds = 6;
+}
+
+message WalletResponse {
+  string wallet_id = 1;
+  string organization_id = 2;
+  string external_customer_id = 3;
+  string currency = 4;
+  string status = 5;
+}
+
+message BalanceResponse {
+  string wallet_id = 1;
+  payguard.common.v1.Money book_balance = 2;
+  payguard.common.v1.Money reserved_balance = 3;
+  payguard.common.v1.Money available_balance = 4;
+}
+
+message FinancialOperationResponse {
+  string transaction_id = 1;
+  string status = 2;
+  string wallet_id = 3;
+  payguard.common.v1.Money amount = 4;
+}
+
+message ReservationResponse {
+  string reservation_id = 1;
+  string wallet_id = 2;
+  payguard.common.v1.Money amount = 3;
+  string status = 4;
+}
+
+message TransactionPageResponse {
+  repeated Transaction transactions = 1;
+  payguard.common.v1.PageInfo page = 2;
+}
+
+message Transaction {
+  string transaction_id = 1;
+  string transaction_type = 2;
+  string status = 3;
+  payguard.common.v1.Money amount = 4;
+  string reference_id = 5;
+  string created_at = 6;
+}

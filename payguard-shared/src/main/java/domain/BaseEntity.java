@@ -1,13 +1,10 @@
 package domain;
 
-import java.util.Objects;
-
-@SuppressWarnings("PMD.AbstractClassWithoutAbstractMethod")
-public abstract class BaseEntity<TId> {
+public class BaseEntity<TId> {
   private final TId id;
 
   protected BaseEntity(TId id) {
-    this.id = Objects.requireNonNull(id, "");
+    this.id = DomainValidation.requireNonNull(id, "Entity id");
   }
 
   public TId getId() {

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://payguard.dev/schema/lending-event-v1.json",
+  "title": "PayGuard lending event envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "aggregateType", "aggregateId", "occurredAt", "schemaVersion", "payload"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"type": "string", "enum": ["collateral.locked.v1", "collateral.valuation-updated.v1", "collateral.margin-call.v1", "collateral.liquidated.v1", "collateral.released.v1", "loan.originated.v1", "loan.disbursed.v1", "loan.installment-due.v1", "loan.repaid.v1", "loan.defaulted.v1", "loan.closed.v1"]},
+    "aggregateType": {"type": "string", "enum": ["Loan", "Collateral"]},
+    "aggregateId": {"type": "string", "minLength": 1},
+    "idempotencyKey": {"type": "string"},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"type": "string"},
+    "correlationId": {"type": "string"},
+    "causationId": {"type": ["string", "null"]},
+    "schemaVersion": {"const": 1},
+    "payload": {"$ref": "#/$defs/lendingPayload"}
+  },
+  "$defs": {
+    "decimal": {"type": "string", "pattern": "^-?[0-9]+(\\.[0-9]+)?$"},
+    "lendingPayload": {"type": "object", "additionalProperties": false, "required": ["loanId", "status"], "properties": {"loanId": {"type": "string"}, "collateralId": {"type": ["string", "null"]}, "subjectToken": {"type": ["string", "null"]}, "status": {"type": "string"}, "exposure": {"$ref": "#/$defs/decimal"}, "collateralValue": {"$ref": "#/$defs/decimal"}, "ltv": {"$ref": "#/$defs/decimal"}, "currency": {"type": "string", "pattern": "^[A-Z]{3}$"}, "reason": {"type": ["string", "null"]}, "policyVersion": {"type": ["string", "null"]}}}
+  }
+}

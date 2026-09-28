@@ -4,6 +4,9 @@ name: Quality Assurance
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   static-analysis-and-tests:
     name: Code Quality & Unit Tests
@@ -19,13 +22,17 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      # 1. Spotless: Verifies code formatting
+      # 1. Spotless: Verifies code formatting without mutating the checkout
       - name: Run Spotless
         run: ./mvnw spotless:check
 
       # 2. CheckStyle: Enforces coding standards
       - name: Run CheckStyle
         run: ./mvnw checkstyle:check
+
+      # Install reactor modules so independent analysis invocations can resolve local artifacts.
+      - name: Install Maven Modules
+        run: ./mvnw -DskipTests -Dpmd.skip=true -Dspotbugs.skip=true install
 
       # 3. PMD: Scans for programming flaws
       - name: Run PMD
