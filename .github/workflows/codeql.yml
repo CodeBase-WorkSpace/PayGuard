@@ -24,16 +24,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
 
-      - name: Detect local act runtime
-        id: runtime
-        shell: bash
-        run: |
-          if [ "${ACT:-}" = "true" ]; then
-            echo "under_act=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "under_act=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Initialize CodeQL
         if: ${{ env.ACT != 'true' }}
         uses: github/codeql-action/init@v4
