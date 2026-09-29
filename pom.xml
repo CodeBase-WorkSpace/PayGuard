@@ -26,12 +26,10 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>4.1.1</spring-boot.version>
-        <grpc.version>1.68.0</grpc.version>
+        <grpc.version>1.84.0</grpc.version>
         <protobuf.version>3.25.5</protobuf.version>
-        <jooq.version>3.19.15</jooq.version>
-        <oracle.driver.version>23.6.0.24.10</oracle.driver.version>
-        <protobuf.maven.plugin.version>0.6.1</protobuf.maven.plugin.version>
-        <os.maven.plugin.version>1.7.1</os.maven.plugin.version>
+        <jooq.version>3.21.8</jooq.version>
+        <oracle.driver.version>23.26.3.0.0</oracle.driver.version>
     </properties>
 
     <dependencyManagement>
@@ -90,7 +88,7 @@
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
-                <version>3.10.0</version>
+                <version>3.10.2</version>
 
                 <configuration>
                     <java>
@@ -130,7 +128,7 @@
                     <dependency>
                         <groupId>com.puppycrawl.tools</groupId>
                         <artifactId>checkstyle</artifactId>
-                        <version>14.0.0</version>
+                        <version>14.1.0</version>
                     </dependency>
                 </dependencies>
 
@@ -190,7 +188,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.10.4.0</version>
+                <version>4.10.4.1</version>
 
                 <configuration>
                     <effort>Max</effort>
