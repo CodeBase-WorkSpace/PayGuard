@@ -1,0 +1,43 @@
+package dev.amg.payguard.identity.customer.domain.value_object;
+
+import domain.ValueObject;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
+
+/** Immutable identifier. Parsing validateAndReturns syntax, not existence or authorization. */
+public final class OtpId implements ValueObject {
+  private static final String OTP_ID_PREFIX = "otp_";
+  private final String value;
+
+  private OtpId(String value) {
+    this.value = PrefixedIdValidator.validateAndReturn(value, OTP_ID_PREFIX);
+  }
+
+  public static OtpId parse(String value) {
+    return new OtpId(value);
+  }
+
+  public String value() {
+    return value;
+  }
+
+  @Override
+  public boolean equals(@Nullable Object other) {
+    return this == other || (other instanceof OtpId that && value.equals(that.value));
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(value);
+  }
+
+  @Override
+  public String toString() {
+    return value;
+  }
+
+  @Override
+  public boolean sameValueAs(@Nullable ValueObject otherOtpId) {
+    return equals(otherOtpId);
+  }
+}
