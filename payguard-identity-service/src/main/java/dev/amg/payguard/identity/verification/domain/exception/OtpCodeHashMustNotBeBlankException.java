@@ -1,0 +1,13 @@
+package dev.amg.payguard.identity.verification.domain.exception;
+
+import java.io.Serial;
+
+public final class OtpCodeHashMustNotBeBlankException extends RuntimeException {
+
+  @Serial private static final long serialVersionUID = 1L;
+  public static final String MESSAGE = "OTP code hash must not be blank.";
+
+  public OtpCodeHashMustNotBeBlankException() {
+    super(MESSAGE);
+  }
+}

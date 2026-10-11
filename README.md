@@ -1,6 +1,81 @@
 # PayGuard
 
-PayGuard is a Java 25 / Spring Boot 4.1.1 financial-platform project under development. Domain ownership, explicit financial amounts, stable customer identities and database isolation are design requirements; this checkout is not a production-readiness or compliance claim.
+**A privacy-focused, secure modular fintech backend for wallet ledgering, loan origination, and digital-collateral risk management.**
+
+[![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)](#)
+[![Java](https://img.shields.io/badge/Java-25-orange?style=flat-square&logo=openjdk)](https://openjdk.org)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.1-brightgreen?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
+[![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20%7C%20DDD-blueviolet?style=flat-square)](https://alistair.cockburn.us/hexagonal-architecture/)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+
+[Overview](#overview) •
+[Services](#services) •
+[Architecture](#architecture) •
+[Key Engineering Decisions](#key-engineering-decisions) •
+[Getting Started](#getting-started) •
+[API Documentation](#api-documentation) •
+[Roadmap](#roadmap)
+
+</div>
+
+---
+
+## Overview
+
+PayGuard is a **privacy-focused** and **security-first** backend system designed for a single, coherent financial story: a customer locks digital assets as collateral, borrows against them, and pays the loan back — while the system continuously monitors the collateral's value and protects itself automatically if that value falls too far.
+
+Built on the principle that sensitive systems should run entirely on your own hardware to keep data completely private[cite: 2], PayGuard is designed to be self-hosted, ensuring you retain absolute control over financial records. The project is constructed as a set of **independently deployable microservices**, each owning its own completely isolated database. They communicate only through explicit contracts — never through a shared schema — bringing the risk of data leakage to absolute zero.
+
+It is a deliberate engineering exercise in the domain problems that sit underneath every regulated lending product, executed with the highest security standards:
+
+- **Immutable and privacy-preserving ledgers:** Double-entry bookkeeping and derived, never-stored balances to eliminate data tampering.
+- **Secure and idempotent financial operations:** Guaranteed transaction integrity under concurrent access.
+- Loan amortization, repayment waterfalls, and delinquency state machines built for strict auditability.
+- Loan-to-Value (LTV) risk monitoring, margin calls, and liquidation via protected, automated mechanisms.
+- **Strict service-to-service communication boundaries:** REST at the edge for external clients, and secure gRPC where internal latency and security matter.
+
+It is not a payment-card switch or a full core-banking platform. The scope is intentionally narrow so that every part of the architecture can be built, understood, and defended in depth against security vulnerabilities.
+
+---
+
+## Core Capabilities
+
+### Implemented / In Progress
+
+- [ ] Account creation and double-entry ledger posting (`wallet-service`)
+- [ ] Hold → capture → release flow for provisional balance reservations
+- [ ] Loan application, approval, and amortization-schedule generation (`loan-service`)
+- [ ] Repayment waterfall (fees → interest → principal)
+- [ ] Collateral locking and Loan-to-Value calculation (`collateral-service`)
+- [ ] Margin-call and liquidation risk monitoring
+- [x] API Gateway routing (REST-in, gRPC-out to internal services)
+
+### Planned
+
+- [ ] Kafka-based domain events between services (e.g. loan approval → collateral linkage)
+- [x] Full CI pipeline (build, test, static analysis) via GitHub Actions
+- [ ] Expanded integration and concurrency test coverage
+
+> This README describes the target architecture and is kept in sync with implementation status via the checkboxes above — see [Current Limitations](#current-limitations) for what is intentionally out of scope for now.
+
+---
+
+## Services
+
+| Service | Responsibility | Persistence | Current State |
+|---|---|---|---|
+| `wallet-service` | Account balances, double-entry ledger, holds/captures | Dedicated Oracle database via **jOOQ** (append-only, no ORM overhead) | In development |
+| `loan-service` | Loan lifecycle, amortization schedules, repayments | Dedicated Oracle database via JPA/Hibernate | In development |
+| `collateral-service` | Collateral locking, price valuation, LTV monitoring, liquidation | Dedicated Oracle database via JPA/Hibernate | In development |
+| `api-gateway` | Single entry point; REST from clients, gRPC to internal services | — | Planned |
+
+> `wallet-service` deliberately uses jOOQ instead of JPA: a ledger is append-only, and jOOQ gives explicit control over `INSERT`-only SQL with no risk of an accidental `UPDATE` slipping in through dirty-checking. `loan-service` and `collateral-service` manage mutable, CRUD-shaped state, where JPA is a better fit.
+
+---
+
+## Architecture
+
+### System Overview
 
 ## Current services
 
