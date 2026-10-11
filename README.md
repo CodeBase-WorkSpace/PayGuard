@@ -50,12 +50,12 @@ It is not a payment-card switch or a full core-banking platform. The scope is in
 - [ ] Repayment waterfall (fees → interest → principal)
 - [ ] Collateral locking and Loan-to-Value calculation (`collateral-service`)
 - [ ] Margin-call and liquidation risk monitoring
-- [ ] API Gateway routing (REST-in, gRPC-out to internal services)
+- [x] API Gateway routing (REST-in, gRPC-out to internal services)
 
 ### Planned
 
 - [ ] Kafka-based domain events between services (e.g. loan approval → collateral linkage)
-- [ ] Full CI pipeline (build, test, static analysis) via GitHub Actions
+- [x] Full CI pipeline (build, test, static analysis) via GitHub Actions
 - [ ] Expanded integration and concurrency test coverage
 
 > This README describes the target architecture and is kept in sync with implementation status via the checkboxes above — see [Current Limitations](#current-limitations) for what is intentionally out of scope for now.
