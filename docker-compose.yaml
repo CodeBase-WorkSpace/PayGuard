@@ -1,99 +1,124 @@
-name: ${COMPOSE_PROJECT_NAME}
+name: ${COMPOSE_PROJECT_NAME:-payguard}
 
 services:
-  oracle-wallet:
-    image: ${ORACLE_IMAGE}
-    container_name: ${COMPOSE_PROJECT_NAME}-oracle-wallet
-    ports:
-      - "${WALLET_ORACLE_PORT}:1521"
+  postgres-wallet:
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
     environment:
-      ORACLE_PASSWORD: ${WALLET_ORACLE_SYSTEM_PASSWORD}
-      APP_USER: ${WALLET_ORACLE_APP_USER}
-      APP_PASSWORD: ${WALLET_ORACLE_APP_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 45s
+      POSTGRES_DB: payguard_wallet
+      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
     volumes:
-      - oracle_wallet_data:/opt/oracle/oradata
+      - postgres_wallet_data:/var/lib/postgresql/data
+      - ./.local/payguard/wallet:/run/payguard:ro
+      - ./infrastructure/postgresql/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
+      - ./infrastructure/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "payguard_wallet"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [database]
+
+  postgres-loan:
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
+    environment:
+      POSTGRES_DB: payguard_loan
+      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
+    volumes:
+      - postgres_loan_data:/var/lib/postgresql/data
+      - ./.local/payguard/loan:/run/payguard:ro
+      - ./infrastructure/postgresql/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
+      - ./infrastructure/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "payguard_loan"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [database]
+
+  postgres-collateral:
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
+    environment:
+      POSTGRES_DB: payguard_collateral
+      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
+    volumes:
+      - postgres_collateral_data:/var/lib/postgresql/data
+      - ./.local/payguard/collateral:/run/payguard:ro
+      - ./infrastructure/postgresql/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
+      - ./infrastructure/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "payguard_collateral"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [database]
+
+  postgres-identity:
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
+    environment:
+      POSTGRES_DB: payguard_identity
+      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
+    volumes:
+      - postgres_identity_data:/var/lib/postgresql/data
+      - ./.local/payguard/identity:/run/payguard:ro
+      - ./infrastructure/postgresql/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
+      - ./infrastructure/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "payguard_identity"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [database]
+
+  vault:
+    image: hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    user: "0:0"
+    environment:
+      SKIP_SETCAP: "1"
+      SKIP_CHOWN: "1"
+    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
+    ports: ["127.0.0.1:${VAULT_PORT:-8200}:8200"]
+    volumes:
+      - vault_data:/vault/data
+      - vault_audit:/vault/audit
+      - ./.local/payguard/vault:/run/payguard:ro
+      - ./infrastructure/vault/server.hcl:/vault/config/server.hcl:ro
+      - ./infrastructure/vault/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
+    networks: [database, operations]
 
   redis:
-    image: redis:8-alpine
-    container_name: payguard-redis
-    ports:
-      - "${REDIS_PORT}:6379"
+    image: redis:8.0.3-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+    networks: [database]
 
-  oracle-loan:
-    image: ${ORACLE_IMAGE}
-    container_name: ${COMPOSE_PROJECT_NAME}-oracle-loan
-    ports:
-      - "${LOAN_ORACLE_PORT}:1521"
-    environment:
-      ORACLE_PASSWORD: ${LOAN_ORACLE_SYSTEM_PASSWORD}
-      APP_USER: ${LOAN_ORACLE_APP_USER}
-      APP_PASSWORD: ${LOAN_ORACLE_APP_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 45s
+  kafka-init:
+    image: apache/kafka:4.0.1
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown 1000:1000 /tmp/kraft-combined-logs"]
     volumes:
-      - oracle_loan_data:/opt/oracle/oradata
-
-  oracle-otp:
-    image: ${ORACLE_IMAGE}
-    container_name: ${COMPOSE_PROJECT_NAME}-oracle-otp
-    ports:
-      - "${OTP_ORACLE_PORT}:1521"
-    environment:
-      ORACLE_PASSWORD: ${OTP_ORACLE_SYSTEM_PASSWORD}
-      APP_USER: ${OTP_ORACLE_APP_USER}
-      APP_USER_PASSWORD: ${OTP_ORACLE_APP_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 45s
-    volumes:
-      - oracle_otp_data:/opt/oracle/oradata
-
-  oracle-collateral:
-    image: ${ORACLE_IMAGE}
-    container_name: ${COMPOSE_PROJECT_NAME}-oracle-collateral
-    ports:
-      - "${COLLATERAL_ORACLE_PORT}:1521"
-    environment:
-      ORACLE_PASSWORD: ${COLLATERAL_ORACLE_SYSTEM_PASSWORD}
-      APP_USER: ${COLLATERAL_ORACLE_APP_USER}
-      APP_PASSWORD: ${COLLATERAL_ORACLE_APP_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/oracle/checkDBStatus.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 45s
-    volumes:
-      - oracle_collateral_data:/opt/oracle/oradata
+      - kafka_data:/tmp/kraft-combined-logs
 
   kafka:
-    image: ${KAFKA_IMAGE}
-    container_name: ${COMPOSE_PROJECT_NAME}-kafka
+    image: apache/kafka:4.0.1
+    networks: [database]
+    container_name: ${COMPOSE_PROJECT_NAME:-payguard}-kafka
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
     ports:
-      - "${KAFKA_PORT}:9092"
+      - "${KAFKA_PORT:-9092}:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:${KAFKA_PORT}
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
@@ -103,7 +128,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
-      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+      CLUSTER_ID: MDEyMzQ1Njc4OWFiY2RlZg
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list"]
       interval: 10s
@@ -114,76 +139,103 @@ services:
       - kafka_data:/tmp/kraft-combined-logs
 
   wallet-service:
+    profiles: [applications]
     build:
       context: .
       dockerfile: payguard-wallet-service/Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME}-wallet-service
-    ports:
-      - "${WALLET_SERVICE_PORT}:8080"
+    user: "${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}"
+    ports: ["127.0.0.1:8081:8080"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-wallet:1521/FREE
-      SPRING_DATASOURCE_USERNAME: ${WALLET_ORACLE_APP_USER}
-      SPRING_DATASOURCE_PASSWORD: ${WALLET_ORACLE_APP_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-wallet:5432/payguard_wallet?sslmode=verify-full&sslrootcert=/run/payguard/ca.crt&currentSchema=payguard
+      VAULT_ADDR: https://vault:8200
+      VAULT_CA_FILE: /run/payguard/ca.crt
+      VAULT_ROLE_ID_FILE: /run/payguard/approle/role-id
+      VAULT_SECRET_ID_FILE: /run/payguard/approle/secret-id
+      REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+      - ./.local/payguard/apps/wallet:/run/payguard/approle:ro
+      - ./.local/payguard/ca.crt:/run/payguard/ca.crt:ro
     depends_on:
-      oracle-wallet: { condition: service_healthy }
-      kafka: { condition: service_healthy }
+      postgres-wallet: {condition: service_healthy}
+    networks: [database, operations]
 
   loan-service:
+    profiles: [applications]
     build:
       context: .
       dockerfile: payguard-loan-service/Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME}-loan-service
-    ports:
-      - "${LOAN_SERVICE_PORT}:8080"
+    user: "${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}"
+    ports: ["127.0.0.1:8082:8080"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-loan:1521/FREE
-      SPRING_DATASOURCE_USERNAME: ${LOAN_ORACLE_APP_USER}
-      SPRING_DATASOURCE_PASSWORD: ${LOAN_ORACLE_APP_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-loan:5432/payguard_loan?sslmode=verify-full&sslrootcert=/run/payguard/ca.crt&currentSchema=payguard
+      VAULT_ADDR: https://vault:8200
+      VAULT_CA_FILE: /run/payguard/ca.crt
+      VAULT_ROLE_ID_FILE: /run/payguard/approle/role-id
+      VAULT_SECRET_ID_FILE: /run/payguard/approle/secret-id
+      REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+      - ./.local/payguard/apps/loan:/run/payguard/approle:ro
+      - ./.local/payguard/ca.crt:/run/payguard/ca.crt:ro
     depends_on:
-      oracle-loan: { condition: service_healthy }
-      kafka: { condition: service_healthy }
+      postgres-loan: {condition: service_healthy}
+    networks: [database, operations]
 
   collateral-service:
+    profiles: [applications]
     build:
       context: .
       dockerfile: payguard-collateral-service/Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME}-collateral-service
-    ports:
-      - "${COLLATERAL_SERVICE_PORT}:8080"
+    user: "${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}"
+    ports: ["127.0.0.1:8083:8080"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-collateral:1521/FREE
-      SPRING_DATASOURCE_USERNAME: ${COLLATERAL_ORACLE_APP_USER}
-      SPRING_DATASOURCE_PASSWORD: ${COLLATERAL_ORACLE_APP_PASSWORD}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-collateral:5432/payguard_collateral?sslmode=verify-full&sslrootcert=/run/payguard/ca.crt&currentSchema=payguard
+      VAULT_ADDR: https://vault:8200
+      VAULT_CA_FILE: /run/payguard/ca.crt
+      VAULT_ROLE_ID_FILE: /run/payguard/approle/role-id
+      VAULT_SECRET_ID_FILE: /run/payguard/approle/secret-id
+      REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+      - ./.local/payguard/apps/collateral:/run/payguard/approle:ro
+      - ./.local/payguard/ca.crt:/run/payguard/ca.crt:ro
     depends_on:
-      oracle-collateral: { condition: service_healthy }
-      kafka: { condition: service_healthy }
+      postgres-collateral: {condition: service_healthy}
+    networks: [database, operations]
 
-  otp-service:
+  identity-service:
+    profiles: [applications]
     build:
       context: .
-      dockerfile: payguard-otp-service/Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME}-otp-service
-    ports:
-      - "${OTP_SERVICE_PORT}:8084"
+      dockerfile: payguard-identity-service/Dockerfile
+    user: "${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}"
+    ports: ["127.0.0.1:8084:8084"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:oracle:thin:@oracle-otp:1521/FREE
-      SPRING_DATASOURCE_USERNAME: ${OTP_ORACLE_APP_USER}
-      SPRING_DATASOURCE_PASSWORD: ${OTP_ORACLE_APP_PASSWORD}
-      OTP_SECURITY_PEPPER: ${OTP_SECURITY_PEPPER}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-identity:5432/payguard_identity?sslmode=verify-full&sslrootcert=/run/payguard/ca.crt&currentSchema=payguard
+      VAULT_ADDR: https://vault:8200
+      VAULT_CA_FILE: /run/payguard/ca.crt
+      VAULT_ROLE_ID_FILE: /run/payguard/approle/role-id
+      VAULT_SECRET_ID_FILE: /run/payguard/approle/secret-id
       REDIS_HOST: redis
-      REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+      - ./.local/payguard/apps/identity:/run/payguard/approle:ro
+      - ./.local/payguard/ca.crt:/run/payguard/ca.crt:ro
     depends_on:
-      oracle-otp: { condition: service_healthy }
-      redis: { condition: service_healthy }
-      kafka: { condition: service_healthy }
+      postgres-identity: {condition: service_healthy}
+    networks: [database, operations]
+
+networks:
+  operations:
+  database:
+    internal: true
 
 volumes:
-  oracle_wallet_data:
-  oracle_loan_data:
-  oracle_collateral_data:
+  postgres_wallet_data:
+  postgres_loan_data:
+  postgres_collateral_data:
+  postgres_identity_data:
+  vault_data:
+  vault_audit:
   kafka_data:
-  oracle_otp_data:

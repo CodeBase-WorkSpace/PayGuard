@@ -1,5 +1,7 @@
 # ADR-0009: Optional device/session binding for OTP challenges
 
+> Database/secret implementation update: ADR 0011–0014 supersede Oracle runtime configuration and define PostgreSQL ownership, scoped Vault key/credential handling and OTP concurrency. Historical context below is retained.
+
 ## Status
 
 Accepted

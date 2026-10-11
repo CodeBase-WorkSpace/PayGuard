@@ -1,0 +1,55 @@
+name: PostgreSQL and Vault verification
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  real-dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: PostgreSQL migrations and competing transactions
+        run: >-
+          ./mvnw -B -ntp -pl payguard-identity-service,payguard-loan-service,payguard-collateral-service -am
+          -Dtest=PostgreSqlTlsTest,PostgresqlMigrationRehearsalTest,SanitizedDependencyErrorTest,OtpInfrastructureIntegrationTest,OtpApplicationContractsTest,LoanServiceApplicationTests,CollateralServiceApplicationTests
+          -Dsurefire.failIfNoSpecifiedTests=false clean test
+      - name: Build protected migration and integration runners
+        run: >-
+          ./mvnw -B -ntp -pl payguard-identity-service,payguard-wallet-service,payguard-loan-service,payguard-collateral-service -am -DskipTests package dependency:copy-dependencies -DincludeScope=test
+      - name: Verify synthetic export and approved identifier mapping
+        run: python3 -m unittest discover -s scripts/migration -p 'test_*.py'
+      - name: Prepare isolated TLS infrastructure
+        run: |
+          python3 scripts/local/prepare.py
+          docker compose --env-file .env.example up -d --wait postgres-wallet postgres-loan postgres-collateral postgres-identity vault
+          python3 scripts/local/vault_bootstrap.py
+      - name: Apply separately privileged Flyway migrations
+        run: |
+          python3 scripts/local/migrate.py identity
+          python3 scripts/local/migrate.py loan
+          python3 scripts/local/migrate.py collateral
+      - name: Verify actual pools, scoped secrets and Vault audit
+        run: python3 scripts/local/verify_vault.py
+      - name: Boot actual packaged services with scoped credentials
+        run: python3 scripts/local/verify_applications.py
+      - name: Preserve test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: database-security-reports
+          path: |
+            **/target/surefire-reports/TEST-*.xml
+            payguard-shared/target/vault-test-reports/*.xml
+          if-no-files-found: warn
+      - name: Stop isolated infrastructure
+        if: always()
+        run: docker compose --env-file .env.example stop

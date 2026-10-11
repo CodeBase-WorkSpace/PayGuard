@@ -7,6 +7,9 @@ on:
     types: [ opened, reopened, synchronize ]
 
 jobs:
+  database-security:
+    uses: ./.github/workflows/_database-security.yml
+
   # 1. Always run quality checks on PRs and main branch pushes
   quality-check:
     uses: ./.github/workflows/_quality.yml
@@ -14,5 +17,5 @@ jobs:
   # 2. Build container images on every PR and main push.
   # This job validates images; it does not publish to an external registry.
   publish-docker:
-    needs: quality-check
+    needs: [quality-check, database-security]
     uses: ./.github/workflows/_publish.yml

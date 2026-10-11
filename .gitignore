@@ -8,3 +8,8 @@ target/
 
 # Local workflow guidance
 GIT_WORKFLOW_CONVENTION.md
+PAYGUARD_GOAL.md
+
+# Protected local PostgreSQL/Vault rehearsal artifacts
+.local/
+__pycache__/
