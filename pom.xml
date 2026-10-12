@@ -18,7 +18,7 @@
         <module>payguard-wallet-service</module>
         <module>payguard-loan-service</module>
         <module>payguard-collateral-service</module>
-        <module>payguard-otp-service</module>
+        <module>payguard-identity-service</module>
     </modules>
 
     <properties>
