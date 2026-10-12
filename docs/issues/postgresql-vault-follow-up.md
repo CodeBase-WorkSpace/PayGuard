@@ -4,7 +4,7 @@ These are reviewable drafts, not issues posted to GitHub. They describe existing
 
 ## Keep OTP identity hashing stable across state changes
 
-**Current status:** Historical finding, resolved in the current checkout's owner domain changes. The normal verification on 2026-10-12 passed the existing stable-hash and collection-membership regressions. Do not open this as an unresolved issue without a new failing reproduction.
+**Current status:** Resolved in committed Identity integration `fd29d35`. The clean publication build reproduced the regression before the fix; full verification then passed 91 tests, including the existing stable-hash and collection-membership cases. Do not open this as an unresolved issue without a new failing reproduction.
 
 **Original problem:** `OTP.equals`/`hashCode` included mutable snapshot state. `OTPTest.aggregateHashCodeRemainsStableAfterStateTransition` failed when consumption changed state; a stored hash collection key could become unreachable.
 
@@ -12,7 +12,7 @@ These are reviewable drafts, not issues posted to GitHub. They describe existing
 
 ## Decide verification timestamps before challenge creation
 
-**Current status:** Historical finding, resolved in the current checkout's owner domain changes. Both pre-creation rejection regressions passed normal verification on 2026-10-12, including wrong-code input without state mutation.
+**Current status:** Resolved in committed Identity integration `fd29d35`. Both pre-creation rejection regressions passed the clean 91-test verification, including wrong-code input without state mutation.
 
 **Original problem:** `OTPTest.verificationBeforeCreationIsRejectedWithoutMutation` expected `IllegalArgumentException`; validation threw `OtpConsumedTimeOutsideValidityPeriodException`. This was a domain/API rejection contract decision, separate from PostgreSQL microsecond precision.
 
@@ -49,6 +49,8 @@ These are reviewable drafts, not issues posted to GitHub. They describe existing
 **Acceptance criteria:** Select the real hosting/workload identity and operator custody boundaries, certificate renewal, audit retention/capacity alerting, encrypted backup/restore rehearsal, least-privilege operator provisioning, SecretID refresh supervision and resource limits. Exercise disaster recovery and key retention before claiming production readiness.
 
 ## Resolve existing typed-identifier PMD naming findings
+
+**Current status:** The published OtpId finding is resolved by renaming its private field while preserving value(). The other five classes are unused local owner work and remain outside this publication. Normal committed PMD/CPD/SpotBugs and full verification pass; no analysis rule was disabled.
 
 **Problem:** Identity's existing AccountId, MembershipId, OtpAuditId, OtpId, RegistrationId and TenantId each use a `value` field and `value()` accessor. PMD flags these six `AvoidFieldNameMatchingMethodName` findings. The migration preserves their actual accessor/API contracts.
 
