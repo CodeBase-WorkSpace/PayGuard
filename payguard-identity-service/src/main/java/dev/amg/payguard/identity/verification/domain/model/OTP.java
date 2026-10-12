@@ -12,13 +12,14 @@ import domain.AggregateRoot;
 import domain.DomainEvent;
 import java.util.Objects;
 import java.util.Optional;
-import org.jspecify.annotations.Nullable;
 
 /**
  * An OTP challenge associated with a PayGuard customer.
  *
  * <p>Owns the challenge's verification and invalidation behavior. State changes replace the current
  * {@link OtpSnapshot} without modifying previously created snapshots.
+ *
+ * <p>Equality and hashing use the immutable challenge identity inherited from the aggregate base.
  *
  * <h2>Issuance and restoration</h2>
  *
@@ -133,22 +134,5 @@ public final class OTP extends AggregateRoot<OtpId, DomainEvent> {
 
   public OtpSnapshot getSnapshot() {
     return snapshot;
-  }
-
-  @Override
-  public boolean equals(@Nullable Object o) {
-    if (!(o instanceof OTP otp)) return false;
-    if (!super.equals(o)) return false;
-
-    return Objects.equals(getCustomerId(), otp.getCustomerId())
-        && Objects.equals(getSnapshot(), otp.getSnapshot());
-  }
-
-  @Override
-  public int hashCode() {
-    int result = super.hashCode();
-    result = 31 * result + Objects.hashCode(getCustomerId());
-    result = 31 * result + Objects.hashCode(getSnapshot());
-    return result;
   }
 }

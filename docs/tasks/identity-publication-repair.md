@@ -20,3 +20,9 @@ The repair branch `amg-complete-identity-service` starts from local main and ret
 ## Evidence boundary
 
 Verification is pending for this publication. Earlier 95-test migration results were from a different full working checkout and do not establish this branch's result. This task does not implement new authentication, migrate live Oracle data, deploy services, disable repository rules, rebase history or force-push.
+
+## First clean verification and bounded repairs
+
+`./mvnw --batch-mode --no-transfer-progress verify` on committed `2a71a7d` executed 91 tests, with four failures and zero errors/skips. Two existing test classes reproduced mutable snapshot hashing and pre-creation verification regressions. The repair restores inherited immutable-identity equality/hashing and rejects pre-creation active verification before checking hashes or recording attempts. Tests retain their assertions. OtpId's private field is renamed to avoid the existing PMD field/accessor finding; the public value() contract and identifier bytes are preserved. The five unpublished future identifier classes are outside this branch. Full re-verification is pending.
+
+Local main now tracks origin/main at `61832f9`; the owner deletion commit remains an ancestor of the repair branch. Live GitHub branch rules were inspected: pull requests and CodeQL scanning are required.

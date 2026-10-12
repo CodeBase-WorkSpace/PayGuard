@@ -4,13 +4,13 @@ import domain.ValueObject;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
-/** Immutable identifier. Parsing validateAndReturns syntax, not existence or authorization. */
+/** Immutable identifier. Parsing validates syntax, not existence or authorization. */
 public final class OtpId implements ValueObject {
   private static final String OTP_ID_PREFIX = "otp_";
-  private final String value;
+  private final String identifier;
 
   private OtpId(String value) {
-    this.value = PrefixedIdValidator.validateAndReturn(value, OTP_ID_PREFIX);
+    this.identifier = PrefixedIdValidator.validateAndReturn(value, OTP_ID_PREFIX);
   }
 
   public static OtpId parse(String value) {
@@ -18,22 +18,22 @@ public final class OtpId implements ValueObject {
   }
 
   public String value() {
-    return value;
+    return identifier;
   }
 
   @Override
   public boolean equals(@Nullable Object other) {
-    return this == other || (other instanceof OtpId that && value.equals(that.value));
+    return this == other || (other instanceof OtpId that && identifier.equals(that.identifier));
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(value);
+    return Objects.hashCode(identifier);
   }
 
   @Override
   public String toString() {
-    return value;
+    return identifier;
   }
 
   @Override
