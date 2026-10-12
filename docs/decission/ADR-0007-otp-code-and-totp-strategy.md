@@ -1,5 +1,7 @@
 # ADR-0007: Use random numeric OTPs for delivery and RFC 6238 for authenticator apps
 
+> Database/secret implementation update: ADR 0011–0014 supersede Oracle runtime configuration and define PostgreSQL ownership, scoped Vault key/credential handling and OTP concurrency. Historical context below is retained.
+
 ## Status
 
 Accepted

@@ -1,0 +1,73 @@
+spring:
+  application:
+    name: payguard-identity-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    properties:
+      hibernate.default_schema: payguard
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: false
+    locations: classpath:db/migration/postgresql
+    clean-disabled: true
+    url: ${SPRING_DATASOURCE_URL}
+    user: ${PAYGUARD_MIGRATION_USERNAME}
+    password: ${PAYGUARD_MIGRATION_PASSWORD}
+    default-schema: payguard
+    schemas: payguard
+    create-schemas: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+server:
+  port: ${OTP_SERVICE_PORT:8084}
+
+identity:
+  delivery:
+    mode: ${OTP_DELIVERY_MODE:mock}
+  challenge:
+    random-ttl: ${OTP_RANDOM_TTL:PT5M}
+    totp-ttl: ${OTP_TOTP_TTL:PT30S}
+    max-attempts: ${OTP_MAX_ATTEMPTS:5}
+  rate-limit:
+    max-issues: ${OTP_MAX_ISSUES:3}
+    max-verifications: ${OTP_MAX_VERIFICATIONS:20}
+    window: ${OTP_RATE_LIMIT_WINDOW:PT15M}
+  audit:
+    retention: ${OTP_AUDIT_RETENTION:P1097D}
+  kafka:
+    topic: ${OTP_KAFKA_TOPIC:identity.events.v1}
+
+payguard:
+  vault:
+    enabled: true
+    address: ${VAULT_ADDR}
+    ca-file: ${VAULT_CA_FILE}
+    role-id-file: ${VAULT_ROLE_ID_FILE}
+    secret-id-file: ${VAULT_SECRET_ID_FILE}
+    secret-prefix: ${PAYGUARD_ENVIRONMENT:local}/identity
+    database-role: ${PAYGUARD_ENVIRONMENT:local}-identity-runtime
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,vault,otpKeys
+  endpoints:
+    web:
+      exposure:
+        include: health,info

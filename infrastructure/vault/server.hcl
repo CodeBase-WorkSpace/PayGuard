@@ -1,0 +1,17 @@
+ui = false
+disable_mlock = true
+/* Threshold-key recovery remains protected by unseal keys and the loopback operations endpoint. */
+enable_unauthenticated_access = ["generate-root"]
+api_addr = "https://vault:8200"
+cluster_addr = "https://vault:8201"
+storage "raft" {
+  path = "/vault/data"
+  node_id = "payguard-local-1"
+}
+listener "tcp" {
+  address = "0.0.0.0:8200"
+  cluster_address = "0.0.0.0:8201"
+  tls_cert_file = "/vault/tls/server.crt"
+  tls_key_file = "/vault/tls/server.key"
+  tls_min_version = "tls12"
+}

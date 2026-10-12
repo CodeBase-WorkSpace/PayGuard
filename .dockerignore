@@ -1,0 +1,11 @@
+.git
+.idea
+.agents
+.codex
+.aws
+.ssh
+.env
+.env.*
+.local
+**/target
+**/__pycache__

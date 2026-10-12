@@ -34,10 +34,13 @@ jobs:
             | grep -A8 -B2 spring-boot-maven-plugin
 
       - name: Build Wallet Service Image
-        run: docker build -f payguard-wallet-service/Dockerfile -t payguard/wallet-service:latest .
+        run: docker build -f payguard-wallet-service/Dockerfile -t payguard/wallet-service:${{ github.sha }} .
 
       - name: Build Loan Service Image
-        run: docker build -f payguard-loan-service/Dockerfile -t payguard/loan-service:latest .
+        run: docker build -f payguard-loan-service/Dockerfile -t payguard/loan-service:${{ github.sha }} .
 
       - name: Build Collateral Service Image
-        run: docker build -f payguard-collateral-service/Dockerfile -t payguard/collateral-service:latest .
+        run: docker build -f payguard-collateral-service/Dockerfile -t payguard/collateral-service:${{ github.sha }} .
+
+      - name: Build Identity Service Image
+        run: docker build -f payguard-identity-service/Dockerfile -t payguard/identity-service:${{ github.sha }} .

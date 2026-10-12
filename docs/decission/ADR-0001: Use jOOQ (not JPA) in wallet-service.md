@@ -1,5 +1,7 @@
 # ADR-0001: Use jOOQ (not JPA) in wallet-service
 
+> Database/secret implementation update: ADR 0011–0014 supersede Oracle runtime configuration and define PostgreSQL ownership, scoped Vault key/credential handling and OTP concurrency. Historical context below is retained; Wallet still has no schema/code-generation adapter in this checkout.
+
 ## Status
 Accepted
 
