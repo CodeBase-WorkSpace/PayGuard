@@ -11,9 +11,9 @@ The repair branch `amg-complete-identity-service` starts from local main and ret
 - [x] Inspect the committed snapshot, working tree, migration notes and CI.
 - [x] Preserve the original deletion commit and create an amg branch from main.
 - [x] Record original file hashes and tracked edits in the ignored local repair directory.
-- [ ] Commit the complete Identity module selection and source dependency closure.
+- [x] Commit the complete Identity module selection and source dependency closure (`23f4a77`).
 - [ ] Verify the committed source from a clean worktree; resolve actual formatting, compilation, test and analysis failures without weakening checks.
-- [ ] Commit the independently verified native Flyway environment fix and documentation.
+- [x] Commit the independently verified native Flyway environment fix and documentation separately.
 - [ ] Push normally, open a PR to main and inspect GitHub quality/security/CodeQL results.
 - [ ] Leave local main aligned with remote main, preserving the owner's deletion commit on the repair branch.
 

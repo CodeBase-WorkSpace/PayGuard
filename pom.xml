@@ -80,10 +80,9 @@
                 <artifactId>flyway-maven-plugin</artifactId>
                 <version>12.4.0</version>
                 <configuration>
-                    <url>${env.PAYGUARD_MIGRATION_JDBC_URL}</url>
-                    <user>${env.PAYGUARD_MIGRATION_USERNAME}</user>
-                    <password>${env.PAYGUARD_MIGRATION_PASSWORD}</password>
-                    <initSql>SET ROLE ${env.PAYGUARD_MIGRATION_OWNER}</initSql>
+                    <!-- Connection settings come from Flyway's native FLYWAY_* environment variables at execution time. -->
+                    <!-- Require explicit owner-role selection; expiring migration logins must not own schema objects. -->
+                    <initSql>DO 'BEGIN RAISE EXCEPTION ''FLYWAY_INIT_SQL must select the service owner''; END;'</initSql>
                     <schemas><schema>payguard</schema></schemas>
                     <defaultSchema>payguard</defaultSchema>
                     <createSchemas>false</createSchemas>
