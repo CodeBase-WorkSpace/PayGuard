@@ -4,7 +4,7 @@
 
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)](#)
 [![Java](https://img.shields.io/badge/Java-25-orange?style=flat-square&logo=openjdk)](https://openjdk.org)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.1-brightgreen?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
 [![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20%7C%20DDD-blueviolet?style=flat-square)](https://alistair.cockburn.us/hexagonal-architecture/)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
@@ -64,9 +64,9 @@ It is not a payment-card switch or a full core-banking platform. The scope is in
 
 | Service | Responsibility | Persistence | Current State |
 |---|---|---|---|
-| `wallet-service` | Account balances, double-entry ledger, holds/captures | Dedicated Oracle database via **jOOQ** (append-only, no ORM overhead) | In development |
-| `loan-service` | Loan lifecycle, amortization schedules, repayments | Dedicated Oracle database via JPA/Hibernate | In development |
-| `collateral-service` | Collateral locking, price valuation, LTV monitoring, liquidation | Dedicated Oracle database via JPA/Hibernate | In development |
+| `wallet-service` | Account balances, double-entry ledger, holds/captures | Dedicated PostgreSQL database with jOOQ Open Source configured; SQL adapter pending | In development |
+| `loan-service` | Loan lifecycle, amortization schedules, repayments | Dedicated PostgreSQL schema; JPA repository adapter pending | In development |
+| `collateral-service` | Collateral locking, price valuation, LTV monitoring, liquidation | Dedicated PostgreSQL schema; JPA repository adapter pending | In development |
 | `api-gateway` | Single entry point; REST from clients, gRPC to internal services | — | Planned |
 
 > `wallet-service` deliberately uses jOOQ instead of JPA: a ledger is append-only, and jOOQ gives explicit control over `INSERT`-only SQL with no risk of an accidental `UPDATE` slipping in through dirty-checking. `loan-service` and `collateral-service` manage mutable, CRUD-shaped state, where JPA is a better fit.
@@ -109,7 +109,7 @@ Use JDK **25**, Docker/Compose, Python 3 and OpenSSL. The Maven wrapper is inclu
 ./mvnw -B -ntp clean verify
 ```
 
-The full build still exposes existing domain/static-analysis defects described in the implementation guide. Do not bypass those checks to claim a passing build.
+The committed Identity integration passed full Maven verification with 91 tests and zero failures, errors or skips, including the existing domain regressions and real PostgreSQL tests. Formatting and static-analysis checks also passed. See [the publication repair log](docs/tasks/identity-publication-repair.md) for the exact source revision and evidence.
 
 For the isolated, persistent TLS PostgreSQL/Vault rehearsal, follow [the implementation guide](docs/guides/postgresql-vault-migration.md). It gives the exact preparation, initialization, migration and test commands. Generated credentials, certificates and unseal material live under ignored `.local/payguard` with protected permissions. `.env.example` contains only public settings. Never copy secrets into an image or publish that directory.
 

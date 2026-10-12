@@ -11,7 +11,7 @@
     </parent>
 
     <artifactId>payguard-identity-service</artifactId>
-    <name>PayGuard OTP Service</name>
+    <name>PayGuard Identity Service</name>
     <properties>
         <spring-modulith.version>2.1.1</spring-modulith.version>
     </properties>

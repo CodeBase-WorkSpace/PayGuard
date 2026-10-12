@@ -1,6 +1,6 @@
 # PostgreSQL and Vault implementation work log
 
-Status: scoped implementation and local verification complete. Normal full verify is blocked by six existing Identity PMD naming findings; live-data and missing financial-adapter work remain outside the proven scope. See the guide for production-dependent limitations. Current source is authoritative.
+Status: historical migration implementation/rehearsal record. Subsequent committed Identity integration passed full verification with 91 tests and all quality gates; see [the publication repair log](identity-publication-repair.md) for current source, publication and CI evidence. The results below describe the earlier full working checkout, including its then-unresolved PMD findings. Live-data and missing financial-adapter work remain outside the proven scope. Current source is authoritative.
 
 ## Authorization and preservation
 

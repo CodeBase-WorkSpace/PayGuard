@@ -26,6 +26,9 @@ public final class OtpVerificationPolicy {
 
   private static Optional<OtpVerificationResult> evaluateActiveStateGuards(
       VerifyOtpCommand command, OtpSnapshot snapshot, OtpCodeHasher hasher) {
+    if (command.now().isBefore(snapshot.createdAt())) {
+      throw new IllegalArgumentException("verification time must not precede challenge creation");
+    }
     if (!command.now().isBefore(snapshot.expiresAt())) {
       return Optional.of(OtpVerificationResult.EXPIRED);
     }
