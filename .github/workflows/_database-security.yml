@@ -1,15 +1,22 @@
-name: PostgreSQL and Vault verification
-
+name: Native infrastructure verification
 on:
   workflow_call:
-
 permissions:
   contents: read
-
 jobs:
-  real-dependencies:
+  isolated-dependencies:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
+    env:
+      COMPOSE_PROJECT_NAME: payguard-it-ci
+      PAYGUARD_RUNTIME_ROOT: /dev/shm/payguard-it-ci
+      PAYGUARD_POSTGRES_IDENTITY_VOLUME: payguard-it-ci_identity
+      PAYGUARD_POSTGRES_WALLET_VOLUME: payguard-it-ci_wallet
+      PAYGUARD_POSTGRES_LOAN_VOLUME: payguard-it-ci_loan
+      PAYGUARD_POSTGRES_COLLATERAL_VOLUME: payguard-it-ci_collateral
+      PAYGUARD_VAULT_DATA_VOLUME: payguard-it-ci_vault
+      PAYGUARD_VAULT_AUDIT_VOLUME: payguard-it-ci_audit
+      PAYGUARD_KAFKA_DATA_VOLUME: payguard-it-ci_kafka
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -17,39 +24,57 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-      - name: PostgreSQL migrations and competing transactions
-        run: >-
-          ./mvnw -B -ntp -pl payguard-identity-service,payguard-loan-service,payguard-collateral-service -am
-          -Dtest=PostgreSqlTlsTest,PostgresqlMigrationRehearsalTest,SanitizedDependencyErrorTest,OtpInfrastructureIntegrationTest,OtpApplicationContractsTest,LoanServiceApplicationTests,CollateralServiceApplicationTests
-          -Dsurefire.failIfNoSpecifiedTests=false clean test
-      - name: Build protected migration and integration runners
-        run: >-
-          ./mvnw -B -ntp -pl payguard-identity-service,payguard-wallet-service,payguard-loan-service,payguard-collateral-service -am -DskipTests package dependency:copy-dependencies -DincludeScope=test
-      - name: Verify synthetic export and approved identifier mapping
-        run: python3 -m unittest discover -s scripts/migration -p 'test_*.py'
-      - name: Prepare isolated TLS infrastructure
+      - name: Install native Ansible dependencies and offline test dependencies
         run: |
-          python3 scripts/local/prepare.py
-          docker compose --env-file .env.example up -d --wait postgres-wallet postgres-loan postgres-collateral postgres-identity vault
-          python3 scripts/local/vault_bootstrap.py
-      - name: Apply separately privileged Flyway migrations
+          python3 -m venv /tmp/payguard-ansible
+          /tmp/payguard-ansible/bin/pip install -r infrastructure/operations/requirements.txt -r infrastructure/tests-requirements.txt
+          /tmp/payguard-ansible/bin/ansible-galaxy collection install -r infrastructure/operations/requirements.yml
+          echo /tmp/payguard-ansible/bin >> "$GITHUB_PATH"
+          echo "PAYGUARD_REPO_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          echo "PAYGUARD_LOCAL_UID=$(id -u)" >> "$GITHUB_ENV"
+          echo "PAYGUARD_LOCAL_GID=$(id -g)" >> "$GITHUB_ENV"
+          echo "PAYGUARD_DOCKER_GID=$(stat -c %g /var/run/docker.sock)" >> "$GITHUB_ENV"
+          mkdir -m 700 "$PAYGUARD_RUNTIME_ROOT"
+      - name: Verify source contracts and build applications
         run: |
-          python3 scripts/local/migrate.py identity
-          python3 scripts/local/migrate.py loan
-          python3 scripts/local/migrate.py collateral
-      - name: Verify actual pools, scoped secrets and Vault audit
-        run: python3 scripts/local/verify_vault.py
-      - name: Boot actual packaged services with scoped credentials
-        run: python3 scripts/local/verify_applications.py
-      - name: Preserve test reports
+          python3 -m unittest discover -s infrastructure/tests -v
+          ./mvnw -B -ntp -pl payguard-identity-service,payguard-wallet-service,payguard-loan-service,payguard-collateral-service -am test package
+      - name: Prepare isolated fixture and allocate only new explicit volumes
+        run: |
+          ansible-playbook -i localhost, -c local infrastructure/operations/prepare.yml -e fresh_target=true
+          ansible-playbook -i localhost, -c local infrastructure/operations/allocate.yml -e fresh_target=true
+          docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml --profile operations build operations
+          docker compose up -d --wait postgres-identity postgres-wallet postgres-loan postgres-collateral
+          docker compose up -d vault
+      - name: Initialize and provision the new fixture through Ansible
+        run: |
+          docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/vault-lifecycle.yml -e operation=initialize -e fresh_target=true -e local_rehearsal=true
+          docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/site.yml -e fresh_target=true
+          docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml up -d agent-operator
+      - name: Run all four CLI migrations twice
+        run: |
+          for pass in 1 2; do
+            for service in identity wallet loan collateral; do
+              docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/migrate.yml -e service="$service"
+            done
+          done
+      - name: Verify privilege boundaries and native Agent security
+        run: |
+          docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/tests/integration.yml
+          docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/tests/agent.yml -e isolated_target=true
+      - name: Boot and verify actual packaged applications
+        run: |
+          docker compose --profile applications up -d --build
+          docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/tests/applications.yml
+      - name: Rehearse an isolated Vault outage and recovery
+        run: docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/tests/recovery.yml
+      - name: Preserve Java test reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: database-security-reports
-          path: |
-            **/target/surefire-reports/TEST-*.xml
-            payguard-shared/target/vault-test-reports/*.xml
+          name: native-infrastructure-java-reports
+          path: '**/target/surefire-reports/TEST-*.xml'
           if-no-files-found: warn
-      - name: Stop isolated infrastructure
+      - name: Stop only this isolated fixture
         if: always()
-        run: docker compose --env-file .env.example stop
+        run: docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml --profile applications --profile operations stop

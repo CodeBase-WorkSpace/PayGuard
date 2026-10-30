@@ -1,0 +1,437 @@
+---
+- name: Reconcile scoped Vault configuration without replacing persisted secrets
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    ca: "{{ repo }}/.local/payguard/ca.crt"
+    token: "{{ lookup('file', repo ~ '/.local/payguard/operator/token') | trim }}"
+    services: [identity, loan, collateral, wallet]
+    role_pairs:
+      - [identity, runtime]
+      - [identity, migration]
+      - [loan, runtime]
+      - [loan, migration]
+      - [collateral, runtime]
+      - [collateral, migration]
+      - [wallet, runtime]
+      - [wallet, migration]
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+
+    - name: Require approved project and scoped operator token
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'COMPOSE_PROJECT_NAME') == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project
+          - token | length > 0
+        fail_msg: Vault reconciliation requires approved project and scoped operator access
+      no_log: true
+
+    - name: Check unsealed Vault over verified HTTPS
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/health
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      changed_when: false
+      no_log: true
+
+    - name: Read persistent mount and audit inventory
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/{{ item }}"
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      loop: [sys/mounts, sys/auth, sys/audit]
+      register: vault_inventory
+      no_log: true
+
+    - name: Enable only missing fresh database mount
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/mounts/database
+        method: POST
+        body_format: json
+        body: {type: database}
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+      when: fresh_target | default(false) | bool and 'database/' not in vault_inventory.results[0].json.data
+      no_log: true
+
+    - name: Enable only missing fresh KV v2 mount
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/mounts/secret
+        method: POST
+        body_format: json
+        body: {type: kv, options: {version: '2'}}
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+      when: fresh_target | default(false) | bool and 'secret/' not in vault_inventory.results[0].json.data
+      no_log: true
+
+    - name: Enable only missing fresh AppRole auth mount
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/auth/approle
+        method: POST
+        body_format: json
+        body: {type: approle}
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+      when: fresh_target | default(false) | bool and 'approle/' not in vault_inventory.results[1].json.data
+      no_log: true
+
+    - name: Enable only missing fresh file audit
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/audit/file
+        method: POST
+        body_format: json
+        body: {type: file, options: {file_path: /vault/audit/audit.json}}
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+      when: fresh_target | default(false) | bool and 'file/' not in vault_inventory.results[2].json.data
+      no_log: true
+
+    - name: Re-read mounts and audit after fresh-only changes
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/{{ item }}"
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      loop: [sys/mounts, sys/auth, sys/audit]
+      register: vault_inventory
+      no_log: true
+
+    - name: Refuse incompatible or missing adopted-state mounts
+      ansible.builtin.assert:
+        that:
+          - vault_inventory.results[0].json.data['database/'].type == 'database'
+          - vault_inventory.results[0].json.data['secret/'].type == 'kv'
+          - vault_inventory.results[0].json.data['secret/'].options.version == '2'
+          - vault_inventory.results[1].json.data['approle/'].type == 'approle'
+          - vault_inventory.results[2].json.data['file/'].type == 'file'
+        fail_msg: Required Vault mount or audit state is missing or incompatible; run the explicit fresh ceremony on a new target
+      no_log: true
+
+    - name: Read existing database connections
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/database/config/local-{{ item }}"
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 404]
+        timeout: 5
+      loop: "{{ services }}"
+      register: db_configs
+      no_log: true
+
+    - name: Refuse missing adopted-state connections
+      ansible.builtin.assert:
+        that:
+          - item.status in [200, 404]
+          - item.status != 200 or 'sslmode=verify-full' in item.json.data.connection_details.connection_url
+        fail_msg: Missing or incompatible Vault database connection requires explicit fresh setup or operator repair
+      loop: "{{ db_configs.results }}"
+      no_log: true
+
+    - name: Create only missing fresh database connections
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/database/config/local-{{ item.item }}"
+        method: POST
+        body_format: json
+        body:
+          plugin_name: postgresql-database-plugin
+          allowed_roles: ["local-{{ item.item }}-runtime", "local-{{ item.item }}-migration"]
+          connection_url: "postgresql://{{ '{{username}}' }}:{{ '{{password}}' }}@postgres-{{ item.item }}:5432/payguard_{{ item.item }}?sslmode=verify-full&sslrootcert=/vault/tls/ca.crt"
+          username: vault_manager
+          password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item.item ~ '/manager-password', errors='ignore') | default((lookup('file', repo ~ '/.local/payguard/' ~ item.item ~ '/credentials.json', errors='ignore') | default('{}', true) | from_json).manager | default(''), true) | trim }}"
+          verify_connection: true
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+        timeout: 10
+      loop: "{{ db_configs.results }}"
+      when: item.status == 404 and fresh_target | default(false) | bool
+      no_log: true
+
+    - name: Rotate only newly created manager connection roots
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/database/rotate-root/local-{{ item.item }}"
+        method: POST
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+        timeout: 10
+      loop: "{{ db_configs.results }}"
+      when: item.status == 404 and fresh_target | default(false) | bool
+      no_log: true
+
+    - name: Extend only allowed role names without supplying manager credentials
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/database/config/local-{{ item.item }}"
+        method: POST
+        body_format: json
+        body:
+          plugin_name: "{{ item.json.data.plugin_name }}"
+          allowed_roles: ["local-{{ item.item }}-runtime", "local-{{ item.item }}-migration"]
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+      when: item.status == 200 and ('local-' ~ item.item ~ '-migration') not in item.json.data.allowed_roles
+      loop: "{{ db_configs.results }}"
+      no_log: true
+
+    - name: Read existing dynamic role definitions
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/database/roles/local-{{ item.0 }}-{{ item.1 }}"
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 404]
+        timeout: 5
+      loop: "{{ role_pairs }}"
+      register: db_roles
+      no_log: true
+
+    - name: Require adopted-state roles or explicit fresh setup
+      ansible.builtin.assert:
+        that:
+          - item.status in [200, 404]
+          - item.status != 200 or item.json.data.db_name == 'local-' ~ item.item.0
+          - item.status != 200 or item.item.1 == 'runtime' or 'WITH INHERIT FALSE, SET TRUE, ADMIN FALSE' in (item.json.data.creation_statements | join(' '))
+          - item.status != 200 or item.item.1 == 'runtime' or 'GRANT CONNECT ON DATABASE payguard_' ~ item.item.0 in (item.json.data.creation_statements | join(' '))
+          - item.status != 200 or item.item.1 == 'migration' or item.item.0 ~ '_runtime' in (item.json.data.creation_statements | join(' '))
+        fail_msg: Missing or cross-service Vault role requires explicit fresh setup
+      loop: "{{ db_roles.results }}"
+      no_log: true
+
+    - name: Create only missing fresh dynamic roles
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/database/roles/local-{{ item.item.0 }}-{{ item.item.1 }}"
+        method: POST
+        body_format: json
+        body:
+          db_name: "local-{{ item.item.0 }}"
+          creation_statements:
+            - "CREATE ROLE \"{{ '{{name}}' }}\" WITH LOGIN PASSWORD '{{ '{{password}}' }}' VALID UNTIL '{{ '{{expiration}}' }}'; GRANT {{ item.item.0 }}_{{ 'runtime' if item.item.1 == 'runtime' else 'owner' }} TO \"{{ '{{name}}' }}\"{{ '' if item.item.1 == 'runtime' else ' WITH INHERIT FALSE, SET TRUE, ADMIN FALSE' }}; {{ '' if item.item.1 == 'runtime' else 'GRANT CONNECT ON DATABASE payguard_' ~ item.item.0 ~ ' TO \"' ~ '{{name}}' ~ '\";' }}"
+          revocation_statements:
+            - "{{ 'REVOKE CONNECT ON DATABASE payguard_' ~ item.item.0 ~ ' FROM \"' ~ '{{name}}' ~ '\"; ' if item.item.1 == 'migration' else '' }}REVOKE {{ item.item.0 }}_{{ 'runtime' if item.item.1 == 'runtime' else 'owner' }} FROM \"{{ '{{name}}' }}\"; DROP ROLE IF EXISTS \"{{ '{{name}}' }}\";"
+          renew_statements: ["ALTER ROLE \"{{ '{{name}}' }}\" VALID UNTIL '{{ '{{expiration}}' }}';"]
+          default_ttl: "{{ '1h' if item.item.1 == 'runtime' else '15m' }}"
+          max_ttl: "{{ '4h' if item.item.1 == 'runtime' else '30m' }}"
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+        timeout: 10
+      loop: "{{ db_roles.results }}"
+      when: item.status == 404
+      no_log: true
+
+    - name: Read scoped policy definitions
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/sys/policies/acl/local-{{ item.0 }}{{ '-migration' if item.1 == 'migration' else '' }}"
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 404]
+        timeout: 5
+      loop: "{{ role_pairs }}"
+      register: policies
+      no_log: true
+
+    - name: Reject missing adopted policies and cross-service grants
+      ansible.builtin.assert:
+        that:
+          - item.status in [200, 404]
+          - item.status != 200 or 'database/creds/local-' ~ item.item.0 ~ '-' ~ item.item.1 in item.json.data.policy
+          - item.status != 200 or (services | reject('equalto', item.item.0) | map('regex_replace', '^(.*)$', 'database/creds/local-\\1-') | select('in', item.json.data.policy) | list | length) == 0
+        fail_msg: Missing or cross-service Vault policy must not be adopted
+      loop: "{{ policies.results }}"
+      no_log: true
+
+    - name: Create only missing fresh scoped policies
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/sys/policies/acl/local-{{ item.item.0 }}{{ '-migration' if item.item.1 == 'migration' else '' }}"
+        method: POST
+        body_format: json
+        body:
+          policy: |
+            path "auth/token/lookup-self" { capabilities = ["read"] }
+            path "auth/token/renew-self" { capabilities = ["update"] }
+            path "auth/token/revoke-self" { capabilities = ["update"] }
+            path "database/creds/local-{{ item.item.0 }}-{{ item.item.1 }}" { capabilities = ["read"] }
+            {% if item.item.1 == 'runtime' %}
+            path "secret/data/local/{{ item.item.0 }}/kafka" { capabilities = ["read"] }
+            path "secret/data/local/infrastructure/redis" { capabilities = ["read"] }
+            path "sys/leases/renew" { capabilities = ["update"] allowed_parameters = { "lease_id" = ["database/creds/local-{{ item.item.0 }}-runtime/*"], "increment" = ["*"] } }
+            path "sys/leases/revoke" { capabilities = ["update"] allowed_parameters = { "lease_id" = ["database/creds/local-{{ item.item.0 }}-runtime/*"], "increment" = ["*"] } }
+            {% if item.item.0 == 'identity' %}
+            path "secret/data/local/identity/otp-keys" { capabilities = ["read"] }
+            path "secret/data/local/identity/authenticators/*" { capabilities = ["read"] }
+            {% endif %}
+            {% endif %}
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+        timeout: 5
+      loop: "{{ policies.results }}"
+      no_log: true
+
+    - name: Read existing AppRole contracts
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/auth/approle/role/local-{{ item.0 }}{{ '-migration' if item.1 == 'migration' else '' }}"
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 404]
+        timeout: 5
+      loop: "{{ role_pairs }}"
+      register: approles
+      no_log: true
+
+    - name: Reject absent or broad adopted AppRoles
+      ansible.builtin.assert:
+        that:
+          - item.status in [200, 404]
+          - item.status != 200 or item.json.data.token_policies == ['local-' ~ item.item.0 ~ ('-migration' if item.item.1 == 'migration' else '')]
+        fail_msg: Missing or broad AppRole cannot be adopted
+      loop: "{{ approles.results }}"
+      no_log: true
+
+    - name: Create only missing fresh AppRoles
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/auth/approle/role/local-{{ item.item.0 }}{{ '-migration' if item.item.1 == 'migration' else '' }}"
+        method: POST
+        body_format: json
+        body:
+          token_policies: ["local-{{ item.item.0 }}{{ '-migration' if item.item.1 == 'migration' else '' }}"]
+          secret_id_ttl: 1h
+          secret_id_num_uses: 0
+          token_ttl: 20m
+          token_max_ttl: 4h
+          token_no_default_policy: true
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+        timeout: 5
+      loop: "{{ approles.results }}"
+      when: item.status == 404
+      no_log: true
+
+    - name: Read scoped operator AppRole
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/auth/approle/role/local-operator
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 404]
+      register: operator_approle
+      no_log: true
+
+    - name: Require existing or explicitly fresh scoped operator AppRole
+      ansible.builtin.assert:
+        that:
+          - operator_approle.status == 200 or fresh_target | default(false) | bool
+          - operator_approle.status != 200 or operator_approle.json.data.token_policies == ['local-operator']
+        fail_msg: Operator AppRole is missing or broader than approved
+      no_log: true
+
+    - name: Create only missing fresh operator AppRole
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/auth/approle/role/local-operator
+        method: POST
+        body_format: json
+        body: {token_policies: [local-operator], secret_id_ttl: 1h, secret_id_num_uses: 0, token_ttl: 20m, token_max_ttl: 4h, token_no_default_policy: true}
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 204]
+      when: operator_approle.status == 404 and fresh_target | default(false) | bool
+      no_log: true
+
+    - name: Read current Identity OTP key without exposing it
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/secret/data/local/identity/otp-keys
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 404]
+        timeout: 5
+      register: otp_key
+      no_log: true
+
+    - name: Reject missing adopted-state OTP key
+      ansible.builtin.assert:
+        that:
+          - otp_key.status == 200 or fresh_target | default(false) | bool
+        fail_msg: Adopted Identity OTP key is missing; do not silently replace it
+
+    - name: Generate only a missing fresh OTP key
+      ansible.builtin.command:
+        argv: [openssl, rand, -base64, '48']
+      register: fresh_otp_key
+      when: otp_key.status == 404 and fresh_target | default(false) | bool
+      no_log: true
+
+    - name: Write missing fresh OTP key with KV create-only CAS
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/secret/data/local/identity/otp-keys
+        method: POST
+        body_format: json
+        body:
+          options: {cas: 0}
+          data: {current: localInitial, keys: {localInitial: "{{ fresh_otp_key.stdout | trim }}"}}
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      when: otp_key.status == 404 and fresh_target | default(false) | bool
+      no_log: true
+
+    - name: Report protected reconciliation result
+      ansible.builtin.debug:
+        msg: Vault configuration checked; existing connection passwords, Raft, audit and OTP key preserved
+
+    - name: Read centralized Redis authentication
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/secret/data/local/infrastructure/redis
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [200, 404]
+      register: redis_secret
+      no_log: true
+
+    - name: Seed only missing Redis authentication using KV create-only CAS
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/secret/data/local/infrastructure/redis
+        method: POST
+        body_format: json
+        body:
+          options: {cas: 0}
+          data: {password: "{{ lookup('file', repo ~ '/.local/payguard/redis/password') | trim }}"}
+        headers: {X-Vault-Token: "{{ token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+      when: redis_secret.status == 404
+      no_log: true

@@ -1,0 +1,42 @@
+---
+- name: Import an approved offline Identity export using native PostgreSQL transactions
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+    - name: Validate protected export and mapping inputs
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      loop: ["{{ source_file }}", "{{ mapping_file }}"]
+      register: inputs
+      no_log: true
+    - name: Require private immutable approved input
+      ansible.builtin.assert:
+        that:
+          - inputs.results[0].stat.isreg
+          - inputs.results[1].stat.isreg
+          - inputs.results[0].stat.mode == '0600'
+          - inputs.results[1].stat.mode == '0600'
+          - inputs.results[1].stat.checksum == approved_mapping_sha256
+          - (lookup('file',mapping_file) | from_json).approved_by | length > 0
+          - (lookup('file',mapping_file) | from_json).approval_reference | length > 0
+      no_log: true
+    - name: Import under stable Identity owner in one rollback-safe transaction
+      community.postgresql.postgresql_query:
+        login_host: postgres-identity
+        login_db: payguard_identity
+        login_user: postgres
+        login_password: "{{ lookup('file',repo ~ '/.local/payguard/identity/admin-password') | trim }}"
+        session_role: identity_owner
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        autocommit: false
+        query: "{{ lookup('file',repo ~ '/infrastructure/postgresql/import-identity.sql') }}"
+        named_args:
+          source: "{{ lookup('file',source_file) }}"
+          mapping: "{{ lookup('file',mapping_file) }}"
+      no_log: true

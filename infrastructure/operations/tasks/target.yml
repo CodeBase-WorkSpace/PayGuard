@@ -1,0 +1,31 @@
+---
+- name: Require an independently recorded local target
+  ansible.builtin.assert:
+    that:
+      - repo is match('^/[^\n]+$')
+      - lookup('env','COMPOSE_PROJECT_NAME') == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project
+      - lookup('env','DOCKER_HOST') in ['', 'unix:///var/run/docker.sock']
+      - lookup('env','DOCKER_CONTEXT') in ['', 'default']
+    fail_msg: Repository, project or Docker endpoint differs from the recorded local target
+- name: Read daemon identity before any target mutation
+  ansible.builtin.command:
+    argv: [docker, info, --format, "{{ '{{.ID}}' }}"]
+  register: current_daemon
+  changed_when: false
+- name: Pin target daemon and repository
+  ansible.builtin.assert:
+    that:
+      - current_daemon.stdout == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).daemon_id
+      - repo == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).repository
+    fail_msg: Target daemon or repository has changed
+- name: Resolve current persistent volume mapping
+  ansible.builtin.command:
+    argv: [docker, compose, -f, "{{ repo }}/docker-compose.yaml", config, --format, json]
+  register: target_compose
+  changed_when: false
+  no_log: true
+- name: Refuse changed volume identities
+  ansible.builtin.assert:
+    that:
+      - (target_compose.stdout | from_json).volumes | dict2items | map(attribute='value.name') | list == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).volumes
+    fail_msg: Compose volumes differ from the recorded target

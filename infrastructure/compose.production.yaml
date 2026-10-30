@@ -1,0 +1,142 @@
+# Requires Docker Compose >= 2.24.4 (!override). External brokers must enforce TLS and authentication.
+services:
+  kafka:
+    profiles: [local-brokers]
+  kafka-init:
+    profiles: [local-brokers]
+  redis:
+    profiles: [local-brokers]
+  identity-service:
+    depends_on: !override
+      postgres-identity: {condition: service_healthy}
+      vault: {condition: service_healthy}
+    networks: [database, operations, egress]
+    environment:
+      SPRING_DATA_REDIS_HOST: ${PAYGUARD_REDIS_HOST:?set authenticated TLS Redis hostname}
+      SPRING_DATA_REDIS_PORT: ${PAYGUARD_REDIS_PORT:-6380}
+      SPRING_DATA_REDIS_SSL_ENABLED: "true"
+      SPRING_DATA_REDIS_SSL_BUNDLE: redis
+      SPRING_SSL_BUNDLE_PEM_REDIS_TRUSTSTORE_CERTIFICATE: file:/etc/payguard/redis-ca.pem
+      KAFKA_BOOTSTRAP_SERVERS: ${PAYGUARD_KAFKA_BOOTSTRAP_SERVERS:?set TLS Kafka bootstrap servers}
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: PLAIN
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PEM
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /etc/payguard/kafka-ca.pem
+      SPRING_KAFKA_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: https
+    volumes:
+      - type: bind
+        source: ./infrastructure/vault/production/identity.hcl
+        target: /etc/vault/runtime.hcl
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PAYGUARD_REDIS_CA_FILE:?set Redis CA file}
+        target: /etc/payguard/redis-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PAYGUARD_KAFKA_CA_FILE:?set Kafka CA file}
+        target: /etc/payguard/kafka-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+  wallet-service:
+    depends_on: !override
+      postgres-wallet: {condition: service_healthy}
+      vault: {condition: service_healthy}
+    networks: [database, operations, egress]
+    environment:
+      SPRING_DATA_REDIS_HOST: ${PAYGUARD_REDIS_HOST:?set authenticated TLS Redis hostname}
+      SPRING_DATA_REDIS_PORT: ${PAYGUARD_REDIS_PORT:-6380}
+      SPRING_DATA_REDIS_SSL_ENABLED: "true"
+      SPRING_DATA_REDIS_SSL_BUNDLE: redis
+      SPRING_SSL_BUNDLE_PEM_REDIS_TRUSTSTORE_CERTIFICATE: file:/etc/payguard/redis-ca.pem
+      KAFKA_BOOTSTRAP_SERVERS: ${PAYGUARD_KAFKA_BOOTSTRAP_SERVERS:?set TLS Kafka bootstrap servers}
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: PLAIN
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PEM
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /etc/payguard/kafka-ca.pem
+      SPRING_KAFKA_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: https
+    volumes:
+      - type: bind
+        source: ./infrastructure/vault/production/wallet.hcl
+        target: /etc/vault/runtime.hcl
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PAYGUARD_REDIS_CA_FILE:?set Redis CA file}
+        target: /etc/payguard/redis-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PAYGUARD_KAFKA_CA_FILE:?set Kafka CA file}
+        target: /etc/payguard/kafka-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+  loan-service:
+    depends_on: !override
+      postgres-loan: {condition: service_healthy}
+      vault: {condition: service_healthy}
+    networks: [database, operations, egress]
+    environment:
+      SPRING_DATA_REDIS_HOST: ${PAYGUARD_REDIS_HOST:?set authenticated TLS Redis hostname}
+      SPRING_DATA_REDIS_PORT: ${PAYGUARD_REDIS_PORT:-6380}
+      SPRING_DATA_REDIS_SSL_ENABLED: "true"
+      SPRING_DATA_REDIS_SSL_BUNDLE: redis
+      SPRING_SSL_BUNDLE_PEM_REDIS_TRUSTSTORE_CERTIFICATE: file:/etc/payguard/redis-ca.pem
+      KAFKA_BOOTSTRAP_SERVERS: ${PAYGUARD_KAFKA_BOOTSTRAP_SERVERS:?set TLS Kafka bootstrap servers}
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: PLAIN
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PEM
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /etc/payguard/kafka-ca.pem
+      SPRING_KAFKA_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: https
+    volumes:
+      - type: bind
+        source: ./infrastructure/vault/production/loan.hcl
+        target: /etc/vault/runtime.hcl
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PAYGUARD_REDIS_CA_FILE:?set Redis CA file}
+        target: /etc/payguard/redis-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PAYGUARD_KAFKA_CA_FILE:?set Kafka CA file}
+        target: /etc/payguard/kafka-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+  collateral-service:
+    depends_on: !override
+      postgres-collateral: {condition: service_healthy}
+      vault: {condition: service_healthy}
+    networks: [database, operations, egress]
+    environment:
+      SPRING_DATA_REDIS_HOST: ${PAYGUARD_REDIS_HOST:?set authenticated TLS Redis hostname}
+      SPRING_DATA_REDIS_PORT: ${PAYGUARD_REDIS_PORT:-6380}
+      SPRING_DATA_REDIS_SSL_ENABLED: "true"
+      SPRING_DATA_REDIS_SSL_BUNDLE: redis
+      SPRING_SSL_BUNDLE_PEM_REDIS_TRUSTSTORE_CERTIFICATE: file:/etc/payguard/redis-ca.pem
+      KAFKA_BOOTSTRAP_SERVERS: ${PAYGUARD_KAFKA_BOOTSTRAP_SERVERS:?set TLS Kafka bootstrap servers}
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+      SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: PLAIN
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_TYPE: PEM
+      SPRING_KAFKA_PROPERTIES_SSL_TRUSTSTORE_LOCATION: /etc/payguard/kafka-ca.pem
+      SPRING_KAFKA_PROPERTIES_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: https
+    volumes:
+      - type: bind
+        source: ./infrastructure/vault/production/collateral.hcl
+        target: /etc/vault/runtime.hcl
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PAYGUARD_REDIS_CA_FILE:?set Redis CA file}
+        target: /etc/payguard/redis-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${PAYGUARD_KAFKA_CA_FILE:?set Kafka CA file}
+        target: /etc/payguard/kafka-ca.pem
+        read_only: true
+        bind: {create_host_path: false}
+networks:
+  egress: {}

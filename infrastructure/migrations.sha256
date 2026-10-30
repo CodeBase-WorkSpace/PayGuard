@@ -1,0 +1,4 @@
+24bd7ec38e26ccece80748bea0b416404280616d9ed8314b8482b09001ccab37  payguard-identity-service/src/main/resources/db/migration/postgresql/V1__identity_schema.sql
+80029ae2b4d46a8318e897600aae44b126640c0eb6ac7d41649a80ca965366a5  payguard-identity-service/src/main/resources/db/migration/postgresql/V2__serialize_active_challenges.sql
+fd430eae5728d056e9cb023a56d7d10f82b7e3ef86b41e3da3191fa6b4ccd4dc  payguard-loan-service/src/main/resources/db/migration/postgresql/V1__loan_schema.sql
+c3c87edc1dfa52c1f96827a402009c2d6fccf33ca8e2ee4b7ee1ff3821d25471  payguard-collateral-service/src/main/resources/db/migration/postgresql/V1__collateral_schema.sql

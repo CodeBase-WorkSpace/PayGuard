@@ -1,0 +1,7 @@
+[Unit]
+Description=Refresh PayGuard scoped Vault AppRole files
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/payguard/operations.env
+ExecStart=/usr/bin/bash -lc 'cd "$PAYGUARD_REPO_ROOT" && docker compose --profile operations -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/refresh-identities.yml'

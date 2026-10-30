@@ -1,0 +1,519 @@
+services:
+  agent-identity:
+    read_only: true
+    cap_drop: &id001
+    - ALL
+    security_opt: &id002
+    - no-new-privileges:true
+    profiles:
+    - migration
+    image: hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/agent.hcl
+    - -log-level=error
+    restart: 'no'
+    logging: &id003
+      driver: none
+    networks: &id004
+    - operations
+    volumes:
+    - type: bind
+      source: ./infrastructure/vault/agent/identity.hcl
+      target: /etc/vault/agent.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/operator/identity
+      target: /run/agent-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/identity/private
+      target: /run/agent-private
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/identity/handoff
+      target: /run/agent-handoff
+      read_only: false
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+  migrate-identity:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - migration
+    image: flyway/flyway:13.7.0-alpine@sha256:4b95b4ba46a948262ee3420a112d233992cdbd3f73bab37335d8f3cd9e5e369d
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    restart: 'no'
+    logging:
+      driver: none
+    command:
+    - -configFiles=/flyway/conf/flyway.toml,/run/agent-handoff/credential.toml
+    - migrate
+    depends_on:
+      agent-identity:
+        condition: service_completed_successfully
+      postgres-identity:
+        condition: service_healthy
+    volumes:
+    - type: bind
+      source: ./infrastructure/flyway/flyway.toml
+      target: /flyway/conf/flyway.toml
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./payguard-identity-service/src/main/resources/db/migration/postgresql
+      target: /flyway/sql
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/flyway/callbacks/identity
+      target: /flyway/callbacks
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/identity/handoff
+      target: /run/agent-handoff
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /run/agent-ca/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    networks:
+    - database
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+  agent-wallet:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - migration
+    image: hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/agent.hcl
+    - -log-level=error
+    restart: 'no'
+    logging:
+      driver: none
+    networks:
+    - operations
+    volumes:
+    - type: bind
+      source: ./infrastructure/vault/agent/wallet.hcl
+      target: /etc/vault/agent.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/operator/wallet
+      target: /run/agent-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/wallet/private
+      target: /run/agent-private
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/wallet/handoff
+      target: /run/agent-handoff
+      read_only: false
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+  migrate-wallet:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - migration
+    image: flyway/flyway:13.7.0-alpine@sha256:4b95b4ba46a948262ee3420a112d233992cdbd3f73bab37335d8f3cd9e5e369d
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    restart: 'no'
+    logging:
+      driver: none
+    command:
+    - -configFiles=/flyway/conf/flyway.toml,/run/agent-handoff/credential.toml
+    - migrate
+    depends_on:
+      agent-wallet:
+        condition: service_completed_successfully
+      postgres-wallet:
+        condition: service_healthy
+    volumes:
+    - type: bind
+      source: ./infrastructure/flyway/flyway.toml
+      target: /flyway/conf/flyway.toml
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./payguard-wallet-service/src/main/resources/db/migration/postgresql
+      target: /flyway/sql
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/flyway/callbacks/wallet
+      target: /flyway/callbacks
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/wallet/handoff
+      target: /run/agent-handoff
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /run/agent-ca/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    networks:
+    - database
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+  agent-loan:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - migration
+    image: hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/agent.hcl
+    - -log-level=error
+    restart: 'no'
+    logging:
+      driver: none
+    networks:
+    - operations
+    volumes:
+    - type: bind
+      source: ./infrastructure/vault/agent/loan.hcl
+      target: /etc/vault/agent.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/operator/loan
+      target: /run/agent-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/loan/private
+      target: /run/agent-private
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/loan/handoff
+      target: /run/agent-handoff
+      read_only: false
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+  migrate-loan:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - migration
+    image: flyway/flyway:13.7.0-alpine@sha256:4b95b4ba46a948262ee3420a112d233992cdbd3f73bab37335d8f3cd9e5e369d
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    restart: 'no'
+    logging:
+      driver: none
+    command:
+    - -configFiles=/flyway/conf/flyway.toml,/run/agent-handoff/credential.toml
+    - migrate
+    depends_on:
+      agent-loan:
+        condition: service_completed_successfully
+      postgres-loan:
+        condition: service_healthy
+    volumes:
+    - type: bind
+      source: ./infrastructure/flyway/flyway.toml
+      target: /flyway/conf/flyway.toml
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./payguard-loan-service/src/main/resources/db/migration/postgresql
+      target: /flyway/sql
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/flyway/callbacks/loan
+      target: /flyway/callbacks
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/loan/handoff
+      target: /run/agent-handoff
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /run/agent-ca/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    networks:
+    - database
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+  agent-collateral:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - migration
+    image: hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/agent.hcl
+    - -log-level=error
+    restart: 'no'
+    logging:
+      driver: none
+    networks:
+    - operations
+    volumes:
+    - type: bind
+      source: ./infrastructure/vault/agent/collateral.hcl
+      target: /etc/vault/agent.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/operator/collateral
+      target: /run/agent-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/collateral/private
+      target: /run/agent-private
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/collateral/handoff
+      target: /run/agent-handoff
+      read_only: false
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+  migrate-collateral:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - migration
+    image: flyway/flyway:13.7.0-alpine@sha256:4b95b4ba46a948262ee3420a112d233992cdbd3f73bab37335d8f3cd9e5e369d
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    restart: 'no'
+    logging:
+      driver: none
+    command:
+    - -configFiles=/flyway/conf/flyway.toml,/run/agent-handoff/credential.toml
+    - migrate
+    depends_on:
+      agent-collateral:
+        condition: service_completed_successfully
+      postgres-collateral:
+        condition: service_healthy
+    volumes:
+    - type: bind
+      source: ./infrastructure/flyway/flyway.toml
+      target: /flyway/conf/flyway.toml
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./payguard-collateral-service/src/main/resources/db/migration/postgresql
+      target: /flyway/sql
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/flyway/callbacks/collateral
+      target: /flyway/callbacks
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_ATTEMPT_ROOT:-/run/payguard-unset}/collateral/handoff
+      target: /run/agent-handoff
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /run/agent-ca/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    networks:
+    - database
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+  operations:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - operations
+    build:
+      context: ./infrastructure/operations
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    group_add:
+    - ${PAYGUARD_DOCKER_GID:-0}
+    working_dir: ${PAYGUARD_REPO_ROOT:-/workspace/payguard}
+    entrypoint:
+    - ansible-playbook
+    - -i
+    - localhost,
+    - -c
+    - local
+    environment:
+      PAYGUARD_REPO_ROOT: ${PAYGUARD_REPO_ROOT:-/workspace/payguard}
+      PAYGUARD_RUNTIME_ROOT: ${PAYGUARD_RUNTIME_ROOT:-/dev/shm/payguard}
+      PAYGUARD_LOCAL_UID: ${PAYGUARD_LOCAL_UID:-1000}
+      PAYGUARD_LOCAL_GID: ${PAYGUARD_LOCAL_GID:-1000}
+      PAYGUARD_DOCKER_GID: ${PAYGUARD_DOCKER_GID:-0}
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-payguard}
+      ANSIBLE_CONFIG: ${PAYGUARD_REPO_ROOT:-/workspace/payguard}/infrastructure/operations/ansible.cfg
+      ANSIBLE_LOCAL_TEMP: /tmp/ansible
+      ANSIBLE_REMOTE_TEMP: /tmp/ansible
+      ANSIBLE_HOME: /tmp/ansible-home
+    volumes:
+    - type: bind
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: .
+      target: ${PAYGUARD_REPO_ROOT:-/workspace/payguard}
+      read_only: false
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${PAYGUARD_RUNTIME_ROOT:-/dev/shm/payguard}
+      target: ${PAYGUARD_RUNTIME_ROOT:-/dev/shm/payguard}
+      read_only: false
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    networks:
+    - database
+    - operations
+  agent-operator:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    image: hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    logging: *id003
+    networks: *id004
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    profiles:
+    - operations
+    restart: unless-stopped
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/agent.hcl
+    - -log-level=error
+    volumes:
+    - type: bind
+      source: ./infrastructure/vault/agent/operator.hcl
+      target: /etc/vault/agent.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/operator/approle
+      target: /run/operator-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/operator
+      target: /run/operator
+      read_only: false
+      bind:
+        create_host_path: false

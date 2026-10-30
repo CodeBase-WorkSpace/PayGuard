@@ -103,15 +103,15 @@ Domain rules remain in the domain, use-case coordination in application code, an
 
 ## Build and local rehearsal
 
-Use JDK **25**, Docker/Compose, Python 3 and OpenSSL. The Maven wrapper is included. Database integration tests start real PostgreSQL containers; they do not require an unset opt-in flag.
+Use JDK **25**, Docker/Compose, Ansible and OpenSSL. The Maven wrapper is included. Database integration tests start real PostgreSQL containers; they do not require an unset opt-in flag.
 
 ```bash
 ./mvnw -B -ntp clean verify
 ```
 
-The committed Identity integration passed full Maven verification with 91 tests and zero failures, errors or skips, including the existing domain regressions and real PostgreSQL tests. Formatting and static-analysis checks also passed. See [the publication repair log](docs/tasks/identity-publication-repair.md) for the exact source revision and evidence.
+Historical Identity verification is recorded in [the publication repair log](docs/tasks/identity-publication-repair.md). It does not validate the new Vault Agent lifecycle; see [current infrastructure validation](docs/infrastructure-validation.md).
 
-For the isolated, persistent TLS PostgreSQL/Vault rehearsal, follow [the implementation guide](docs/guides/postgresql-vault-migration.md). It gives the exact preparation, initialization, migration and test commands. Generated credentials, certificates and unseal material live under ignored `.local/payguard` with protected permissions. `.env.example` contains only public settings. Never copy secrets into an image or publish that directory.
+For the Compose, Vault Agent, Ansible and Flyway CLI deployment, follow [the infrastructure runbook](docs/infrastructure.md). It gives the exact preparation, initialization, migration and test commands. Generated credentials, certificates and unseal material live under ignored `.local/payguard` with protected permissions. `.env.example` contains only public settings. Never copy secrets into an image or publish that directory.
 
 Runtime Flyway is disabled: apply migrations using the migration identity before starting applications. The `applications` Compose profile is separate from the database/Vault infrastructure. Provider delivery, customer enrollment, external authentication, production certificate issuance, HA/auto-unseal and durable event delivery are not implemented by this migration.
 

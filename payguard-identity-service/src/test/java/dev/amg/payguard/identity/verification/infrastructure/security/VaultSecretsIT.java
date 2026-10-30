@@ -137,11 +137,15 @@ class VaultSecretsIT {
   }
 
   private static VaultClient client(String folder) {
-    Path scope = LOCAL.resolve(folder);
+    String scope =
+        folder.equals("operator/approle")
+            ? "OPERATOR"
+            : folder.substring(5).toUpperCase(java.util.Locale.ROOT);
+    String tokenFile = System.getenv("PAYGUARD_REHEARSAL_" + scope + "_TOKEN_FILE");
+    if (tokenFile == null || tokenFile.isBlank()) {
+      throw new IllegalStateException("Agent token fixture path required for " + scope);
+    }
     return new VaultClient(
-        URI.create("https://vault:8200"),
-        LOCAL.resolve("ca.crt"),
-        scope.resolve("role-id"),
-        scope.resolve("secret-id"));
+        URI.create("https://vault:8200"), LOCAL.resolve("ca.crt"), Path.of(tokenFile));
   }
 }

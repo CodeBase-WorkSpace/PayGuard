@@ -1,10 +1,12 @@
 #!/bin/sh
 set -eu
-mkdir -p /vault/tls /vault/audit
+mkdir -p /vault/tls /vault/audit /vault/data
 cp /run/payguard/server.crt /vault/tls/server.crt
 cp /run/payguard/server.key /vault/tls/server.key
 cp /run/payguard/ca.crt /vault/tls/ca.crt
-chown -R vault:vault /vault/tls /vault/data /vault/audit
+# Only top-level ownership is reconciled; existing Raft contents are retained.
+chown vault:vault /vault/tls /vault/audit /vault/data
+chown vault:vault /vault/tls/*
 chmod 700 /vault/tls /vault/audit
 chmod 600 /vault/tls/server.key
-exec /usr/local/bin/docker-entrypoint.sh server
+exec su-exec vault vault server -config=/vault/config/server.hcl

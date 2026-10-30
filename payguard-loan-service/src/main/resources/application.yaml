@@ -4,6 +4,12 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 5000
+      validation-timeout: 2000
+      max-lifetime: 300000
+      keepalive-time: 30000
   jpa:
     properties:
       hibernate.default_schema: payguard
@@ -12,23 +18,13 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: false
-    locations: classpath:db/migration/postgresql
-    clean-disabled: true
-    url: ${SPRING_DATASOURCE_URL}
-    user: ${PAYGUARD_MIGRATION_USERNAME}
-    password: ${PAYGUARD_MIGRATION_PASSWORD}
-    default-schema: payguard
-    schemas: payguard
-    create-schemas: false
 
 payguard:
   vault:
     enabled: true
     address: ${VAULT_ADDR}
     ca-file: ${VAULT_CA_FILE}
-    role-id-file: ${VAULT_ROLE_ID_FILE}
-    secret-id-file: ${VAULT_SECRET_ID_FILE}
-    database-role: ${PAYGUARD_ENVIRONMENT:local}-loan-runtime
+    token-file: ${VAULT_TOKEN_FILE}
 
 management:
   endpoint:
@@ -42,3 +38,8 @@ management:
     web:
       exposure:
         include: health,info
+
+server:
+  shutdown: graceful
+
+spring.lifecycle.timeout-per-shutdown-phase: 20s

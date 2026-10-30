@@ -1,0 +1,105 @@
+---
+- name: Refresh existing scoped AppRole identities without broad revocation
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    ca: "{{ repo }}/.local/payguard/ca.crt"
+    operator_token: "{{ lookup('file', repo ~ '/.local/payguard/operator/token') | trim }}"
+    identities:
+      - {role: local-identity, path: apps/identity}
+      - {role: local-loan, path: apps/loan}
+      - {role: local-collateral, path: apps/collateral}
+      - {role: local-wallet, path: apps/wallet}
+      - {role: local-identity-migration, path: operator/identity}
+      - {role: local-loan-migration, path: operator/loan}
+      - {role: local-collateral-migration, path: operator/collateral}
+      - {role: local-wallet-migration, path: operator/wallet}
+      - {role: local-operator, path: operator/approle}
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+
+    - name: Pin approved project and require protected operator token
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'COMPOSE_PROJECT_NAME') == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project
+          - operator_token | length > 0
+        fail_msg: Scoped refresh requires the approved project and operator token
+      no_log: true
+
+    - name: Read existing scoped role IDs
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/auth/approle/role/{{ item.role }}/role-id"
+        headers: {X-Vault-Token: "{{ operator_token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      loop: "{{ identities }}"
+      register: role_ids
+      no_log: true
+
+    - name: Issue a 60-second response-wrapped SecretID for each existing role
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/auth/approle/role/{{ item.role }}/secret-id"
+        method: POST
+        body_format: json
+        body: {}
+        headers:
+          X-Vault-Token: "{{ operator_token }}"
+          X-Vault-Wrap-TTL: 60s
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      loop: "{{ identities }}"
+      register: wrapped
+      no_log: true
+
+    - name: Unwrap each SecretID exactly once
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/wrapping/unwrap
+        method: POST
+        headers: {X-Vault-Token: "{{ item.json.wrap_info.token }}"}
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      loop: "{{ wrapped.results }}"
+      register: unwrapped
+      no_log: true
+
+    - name: Validate reusable one-hour SecretID contract before replacing files
+      ansible.builtin.assert:
+        that:
+          - item.json.data.secret_id | length > 0
+          - item.json.data.secret_id_ttl | int == 3600
+          - item.json.data.secret_id_num_uses | int == 0
+        fail_msg: Wrapped identity does not match the approved one-hour contract
+      loop: "{{ unwrapped.results }}"
+      no_log: true
+
+    - name: Replace role ID files atomically
+      ansible.builtin.copy:
+        dest: "{{ repo }}/.local/payguard/{{ item.path }}/role-id"
+        content: "{{ role_ids.results[index].json.data.role_id }}\n"
+        mode: '0600'
+      loop: "{{ identities }}"
+      loop_control:
+        index_var: index
+      no_log: true
+
+    - name: Replace SecretID files atomically after all unwraps pass
+      ansible.builtin.copy:
+        dest: "{{ repo }}/.local/payguard/{{ item.path }}/secret-id"
+        content: "{{ unwrapped.results[index].json.data.secret_id }}\n"
+        mode: '0600'
+      loop: "{{ identities }}"
+      loop_control:
+        index_var: index
+      no_log: true
+
+    - name: Report scoped refresh without identifiers
+      ansible.builtin.debug:
+        msg: "scoped_identity_refresh=complete roles={{ identities | length }}"

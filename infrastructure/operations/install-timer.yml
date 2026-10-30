@@ -1,0 +1,38 @@
+---
+- name: Install scoped identity refresh for the current Linux user
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+    config_dir: "{{ lookup('env','HOME') }}/.config"
+  tasks:
+    - name: Create user configuration directories
+      ansible.builtin.file:
+        path: "{{ config_dir }}/{{ item }}"
+        state: directory
+        mode: '0700'
+      loop: [payguard, systemd/user]
+    - name: Install the actual target environment without secret values
+      ansible.builtin.copy:
+        dest: "{{ config_dir }}/payguard/operations.env"
+        content: |
+          PAYGUARD_REPO_ROOT={{ repo }}
+          PAYGUARD_RUNTIME_ROOT={{ lookup('env','PAYGUARD_RUNTIME_ROOT') }}
+          PAYGUARD_LOCAL_UID={{ lookup('env','PAYGUARD_LOCAL_UID') }}
+          PAYGUARD_LOCAL_GID={{ lookup('env','PAYGUARD_LOCAL_GID') }}
+          PAYGUARD_DOCKER_GID={{ lookup('env','PAYGUARD_DOCKER_GID') }}
+          COMPOSE_PROJECT_NAME={{ lookup('env','COMPOSE_PROJECT_NAME') }}
+        mode: '0600'
+    - name: Install the user service and timer
+      ansible.builtin.copy:
+        src: "{{ repo }}/infrastructure/operations/{{ item }}"
+        dest: "{{ config_dir }}/systemd/user/{{ item }}"
+        mode: '0600'
+      loop: [refresh-identities.service, refresh-identities.timer]
+    - name: Enable automatic scoped identity refresh
+      ansible.builtin.systemd_service:
+        name: refresh-identities.timer
+        scope: user
+        daemon_reload: true
+        enabled: true
+        state: started

@@ -76,25 +76,6 @@
         </extensions>
         <plugins>
             <plugin>
-                <groupId>org.flywaydb</groupId>
-                <artifactId>flyway-maven-plugin</artifactId>
-                <version>12.4.0</version>
-                <configuration>
-                    <!-- Connection settings come from Flyway's native FLYWAY_* environment variables at execution time. -->
-                    <!-- Require explicit owner-role selection; expiring migration logins must not own schema objects. -->
-                    <initSql>DO 'BEGIN RAISE EXCEPTION ''FLYWAY_INIT_SQL must select the service owner''; END;'</initSql>
-                    <schemas><schema>payguard</schema></schemas>
-                    <defaultSchema>payguard</defaultSchema>
-                    <createSchemas>false</createSchemas>
-                    <cleanDisabled>true</cleanDisabled>
-                    <locations><location>filesystem:${project.basedir}/src/main/resources/db/migration/postgresql</location></locations>
-                </configuration>
-                <dependencies>
-                    <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-database-postgresql</artifactId><version>12.4.0</version></dependency>
-                    <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><version>42.7.13</version></dependency>
-                </dependencies>
-            </plugin>
-            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>

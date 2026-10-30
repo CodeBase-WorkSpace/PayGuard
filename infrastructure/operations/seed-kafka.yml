@@ -1,0 +1,49 @@
+---
+- name: Import externally provisioned per-service Kafka credentials once
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+    services: [identity, wallet, loan, collateral]
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+    - name: Require a protected credential file
+      ansible.builtin.stat:
+        path: "{{ kafka_credentials_file }}"
+      register: credentials
+      no_log: true
+    - name: Refuse exposed Kafka input
+      ansible.builtin.assert:
+        that:
+          - credentials.stat.isreg
+          - credentials.stat.mode == '0600'
+      no_log: true
+    - name: Read current per-service Kafka secrets
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/secret/data/local/{{ item }}/kafka"
+        headers:
+          X-Vault-Token: "{{ lookup('file',repo ~ '/.local/payguard/operator/token') | trim }}"
+        ca_path: "{{ repo }}/.local/payguard/ca.crt"
+        validate_certs: true
+        status_code: [200, 404]
+      loop: "{{ services }}"
+      register: kafka_secrets
+      no_log: true
+    - name: Create only missing Kafka secrets with CAS and preserve existing versions
+      ansible.builtin.uri:
+        url: "https://vault:8200/v1/secret/data/local/{{ item.item }}/kafka"
+        method: POST
+        body_format: json
+        body:
+          options: {cas: 0}
+          data:
+            jaas_config: "{{ (lookup('file',kafka_credentials_file) | from_json)[item.item].jaas_config }}"
+        headers:
+          X-Vault-Token: "{{ lookup('file',repo ~ '/.local/payguard/operator/token') | trim }}"
+        ca_path: "{{ repo }}/.local/payguard/ca.crt"
+        validate_certs: true
+        status_code: 200
+      loop: "{{ kafka_secrets.results }}"
+      when: item.status == 404
+      no_log: true

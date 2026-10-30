@@ -1,0 +1,56 @@
+---
+- name: Take protected PostgreSQL and Vault backups without changing source data
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+    services: [identity, wallet, loan, collateral]
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+    - name: Require an absolute operator-selected destination
+      ansible.builtin.assert:
+        that:
+          - backup_directory is match('^/[^\n]+$')
+          - not (backup_directory is exists)
+    - name: Create a private backup directory
+      ansible.builtin.file:
+        path: "{{ backup_directory }}"
+        state: directory
+        mode: '0700'
+    - name: Dump each database using native PostgreSQL tooling
+      ansible.builtin.shell: >-
+        umask 077;
+        docker compose -f {{ (repo ~ '/docker-compose.yaml') | quote }}
+        exec -T -u postgres postgres-{{ item }}
+        pg_dump -U postgres -d payguard_{{ item }} --format=custom
+        > {{ (backup_directory ~ '/' ~ item ~ '.dump') | quote }}
+      args:
+        executable: /bin/sh
+      loop: "{{ services }}"
+      no_log: true
+    - name: Save a native Raft snapshot with verified TLS
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/storage/raft/snapshot
+        method: GET
+        headers:
+          X-Vault-Token: "{{ lookup('file', repo ~ '/.local/payguard/operator/token') | trim }}"
+        ca_path: "{{ repo }}/.local/payguard/ca.crt"
+        validate_certs: true
+        dest: "{{ backup_directory }}/vault.snap"
+        mode: '0600'
+        status_code: 200
+        timeout: 60
+      no_log: true
+    - name: Compute checksums without reading financial contents into output
+      ansible.builtin.stat:
+        path: "{{ backup_directory }}/{{ item }}"
+        checksum_algorithm: sha256
+      loop: [identity.dump, wallet.dump, loan.dump, collateral.dump, vault.snap]
+      register: backups
+      no_log: true
+    - name: Record backup completeness and exact source identity
+      ansible.builtin.copy:
+        dest: "{{ backup_directory }}/manifest.yml"
+        content: "{{ {'target': lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml, 'files': backups.results | map(attribute='stat') | map(attribute='checksum') | list, 'restore_verified': false, 'cross_service_consistency': 'quiesce writers before invoking for a consistent application checkpoint'} | to_nice_yaml }}"
+        mode: '0600'

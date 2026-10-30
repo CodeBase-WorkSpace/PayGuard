@@ -1,0 +1,105 @@
+- name: Validate recorded target
+  ansible.builtin.import_tasks: tasks/target.yml
+
+- name: Reject unknown service or project
+  ansible.builtin.assert:
+    that:
+      - service | default('') in ['identity', 'wallet', 'loan', 'collateral']
+      - repo | length > 0
+      - runtime_root is match('^/[^ ]+$')
+      - operator_uid >= 0
+      - operator_gid >= 0
+      - lookup('env', 'COMPOSE_PROJECT_NAME') == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project
+      - (agent_timeout_seconds | default(60) | int) > 0
+      - (agent_timeout_seconds | default(60) | int) <= 60
+    fail_msg: Invalid service, project, or controller environment
+
+- name: Check local Docker daemon
+  ansible.builtin.command:
+    argv: [docker, context, inspect]
+  register: docker_context
+  changed_when: false
+
+- name: Reject a remote Docker daemon
+  ansible.builtin.assert:
+    that:
+      - (docker_context.stdout | from_json)[0].Endpoints.docker.Host.startswith('unix://')
+      - lookup('env', 'DOCKER_HOST') in ['', 'unix:///var/run/docker.sock']
+      - lookup('env', 'DOCKER_CONTEXT') in ['', 'default']
+    fail_msg: A local Unix-socket Docker daemon is required
+
+- name: Check protected handoff is on tmpfs
+  ansible.builtin.command:
+    argv: [findmnt, -T, "{{ runtime_root }}", -n, -o, FSTYPE]
+  register: runtime_fs
+  changed_when: false
+  failed_when: runtime_fs.rc != 0 or runtime_fs.stdout != 'tmpfs'
+
+- name: Check host paths and protected inputs
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ runtime_root }}"
+    - "{{ repo }}/.local/payguard/ca.crt"
+    - "{{ repo }}/.local/payguard/operator/{{ service }}/role-id"
+    - "{{ repo }}/.local/payguard/operator/{{ service }}/secret-id"
+    - "{{ repo }}/infrastructure/vault/agent/{{ service }}.hcl"
+  register: inputs
+  no_log: true
+
+- name: Reject missing or unprotected host paths
+  ansible.builtin.assert:
+    that:
+      - inputs.results | map(attribute='stat.exists') | min
+      - inputs.results[0].stat.isdir
+      - inputs.results[0].stat.writeable
+      - inputs.results[0].stat.mode == '0700'
+      - inputs.results[0].stat.uid == operator_uid
+      - not inputs.results[0].stat.islnk
+      - inputs.results[2].stat.mode == '0600'
+      - inputs.results[3].stat.mode == '0600'
+      - inputs.results[2].stat.uid == operator_uid
+      - inputs.results[3].stat.uid == operator_uid
+    fail_msg: Host mapping or scoped authentication input is unavailable
+
+- name: Validate Compose bind configuration
+  ansible.builtin.command:
+    argv: [docker, compose, -f, "{{ repo }}/docker-compose.yaml", -f, "{{ repo }}/infrastructure/compose.operations.yaml", --profile, migration, config, --quiet]
+  environment:
+    PAYGUARD_ATTEMPT_ROOT: "{{ runtime_root }}"
+    PAYGUARD_LOCAL_UID: "{{ operator_uid | string }}"
+    PAYGUARD_LOCAL_GID: "{{ operator_gid | string }}"
+    PAYGUARD_DOCKER_GID: "{{ lookup('env', 'PAYGUARD_DOCKER_GID') }}"
+    PAYGUARD_RUNTIME_ROOT: "{{ runtime_root }}"
+    COMPOSE_PROJECT_NAME: "{{ lookup('env', 'COMPOSE_PROJECT_NAME') }}"
+  changed_when: false
+
+- name: Check required Compose services are running
+  ansible.builtin.command:
+    argv: [docker, compose, -f, "{{ repo }}/docker-compose.yaml", ps, --status, running, --services]
+  register: running_services
+  changed_when: false
+  failed_when: running_services.rc != 0 or 'vault' not in running_services.stdout_lines or ('postgres-' ~ service) not in running_services.stdout_lines
+
+- name: Check unsealed Vault over verified TLS
+  ansible.builtin.uri:
+    url: https://vault:8200/v1/sys/health
+    ca_path: "{{ repo }}/.local/payguard/ca.crt"
+    validate_certs: true
+    status_code: 200
+    timeout: 5
+  changed_when: false
+  no_log: true
+
+- name: Read the local Docker daemon identity
+  ansible.builtin.command:
+    argv: [docker, info, --format, "{{ '{{.ID}}' }}"]
+  register: daemon_identity
+  changed_when: false
+
+- name: Verify independently recorded target identity
+  ansible.builtin.assert:
+    that:
+      - daemon_identity.stdout == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).daemon_id
+      - (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).repository == repo
+    fail_msg: Docker daemon or repository differs from the adopted target

@@ -1,0 +1,52 @@
+---
+- name: Record an existing target without creating or changing its volumes
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    compose: [docker, compose, -f, "{{ repo }}/docker-compose.yaml"]
+  tasks:
+    - name: Resolve effective Compose names without displaying secret values
+      ansible.builtin.command:
+        argv: "{{ compose + ['config', '--format', 'json'] }}"
+      register: resolved
+      changed_when: false
+      no_log: true
+
+    - name: Read local daemon identity
+      ansible.builtin.command:
+        argv: [docker, info, --format, "{{ '{{.ID}}' }}"]
+      register: daemon
+      changed_when: false
+
+    - name: Select exact external persistent volumes
+      ansible.builtin.set_fact:
+        target_volumes: "{{ (resolved.stdout | from_json).volumes | dict2items | map(attribute='value.name') | list }}"
+      no_log: true
+
+    - name: Require all persistent volumes already exist
+      ansible.builtin.command:
+        argv: [docker, volume, inspect, "{{ item }}"]
+      loop: "{{ target_volumes }}"
+      changed_when: false
+      no_log: true
+
+    - name: Check whether a target is already recorded
+      ansible.builtin.stat:
+        path: "{{ repo }}/.local/payguard/target.yml"
+      register: recorded
+
+    - name: Refuse target drift on repeated adoption
+      ansible.builtin.assert:
+        that:
+          - (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).daemon_id == daemon.stdout
+          - (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project == lookup('env','COMPOSE_PROJECT_NAME')
+          - (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).volumes == target_volumes
+      when: recorded.stat.exists
+
+    - name: Record the target once
+      ansible.builtin.copy:
+        dest: "{{ repo }}/.local/payguard/target.yml"
+        content: "{{ {'project': lookup('env','COMPOSE_PROJECT_NAME'), 'repository': repo, 'daemon_id': daemon.stdout, 'volumes': target_volumes} | to_nice_yaml }}"
+        mode: '0600'
+        force: false
