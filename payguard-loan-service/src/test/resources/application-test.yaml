@@ -4,6 +4,11 @@ payguard:
 spring:
   flyway:
     enabled: true
+    locations: classpath:db/migration/postgresql
+    default-schema: payguard
+    schemas: payguard
+    create-schemas: false
+    clean-disabled: true
 
 management:
   endpoint:
