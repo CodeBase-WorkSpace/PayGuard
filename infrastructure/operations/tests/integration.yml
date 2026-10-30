@@ -1,0 +1,62 @@
+---
+- name: Verify real database ownership, histories and runtime privilege boundaries
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+    services: [identity, wallet, loan, collateral]
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: ../tasks/target.yml
+    - name: Check every independently migrated database
+      ansible.builtin.include_tasks: ../tasks/verify-migration.yml
+      loop: "{{ services }}"
+      loop_control:
+        loop_var: service
+    - name: Reject runtime DDL and role escalation
+      community.postgresql.postgresql_query:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file',repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        query: |
+          SELECT has_schema_privilege('{{ item }}_runtime','payguard','CREATE') AS ddl,
+                 has_database_privilege('{{ item }}_runtime',current_database(),'CREATE') AS create_schema,
+                 pg_has_role('{{ item }}_runtime','{{ item }}_owner','MEMBER') AS owner_member
+      register: runtime_privileges
+      loop: "{{ services }}"
+      no_log: true
+    - name: Assert runtime cannot perform DDL or select owner role
+      ansible.builtin.assert:
+        that:
+          - not item.query_result[0].ddl
+          - not item.query_result[0].create_schema
+          - not item.query_result[0].owner_member
+      loop: "{{ runtime_privileges.results }}"
+      no_log: true
+    - name: Confirm application tables have runtime data privileges
+      community.postgresql.postgresql_query:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file',repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        query: |
+          SELECT count(*)::int AS missing FROM pg_tables
+          WHERE schemaname='payguard' AND tablename<>'flyway_schema_history'
+          AND tablename NOT LIKE '%_audit_log' AND tablename <> 'identity_challenge_scope'
+          AND NOT (has_table_privilege('{{ item }}_runtime',format('payguard.%I',tablename),'SELECT')
+               AND has_table_privilege('{{ item }}_runtime',format('payguard.%I',tablename),'INSERT')
+               AND has_table_privilege('{{ item }}_runtime',format('payguard.%I',tablename),'UPDATE')
+               AND has_table_privilege('{{ item }}_runtime',format('payguard.%I',tablename),'DELETE'))
+      register: table_privileges
+      loop: "{{ services }}"
+      no_log: true
+    - name: Require application data access
+      ansible.builtin.assert:
+        that: item.query_result[0].missing == 0
+      loop: "{{ table_privileges.results }}"
+      no_log: true

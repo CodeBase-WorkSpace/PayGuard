@@ -1,0 +1,6 @@
+---
+# Existing-state reconciliation only. Initialization and migration are separate explicit actions.
+- ansible.builtin.import_playbook: adopt-artifacts.yml
+- ansible.builtin.import_playbook: provision-database.yml
+- ansible.builtin.import_playbook: provision-vault.yml
+- ansible.builtin.import_playbook: refresh-identities.yml

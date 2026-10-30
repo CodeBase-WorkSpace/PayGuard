@@ -1,0 +1,70 @@
+---
+- name: Reconcile newly required protected artifacts without replacing existing credentials
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+    local: "{{ repo }}/.local/payguard"
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+    - name: Create only required protected directories
+      ansible.builtin.file:
+        path: "{{ local }}/{{ item }}"
+        state: directory
+        mode: '0700'
+      loop: [operator/wallet, operator/receipts, operator/approle, apps/identity, apps/wallet, apps/loan, apps/collateral, redis]
+    - name: Read canonical Redis authentication without changing its KV version
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/secret/data/local/infrastructure/redis
+        headers:
+          X-Vault-Token: "{{ lookup('file',local ~ '/operator/token') | trim }}"
+        ca_path: "{{ local }}/ca.crt"
+        validate_certs: true
+        status_code: [200, 404]
+        timeout: 5
+      register: existing_redis
+      no_log: true
+    - name: Check the protected Redis input file
+      ansible.builtin.stat:
+        path: "{{ local }}/redis/password"
+      register: local_redis
+      no_log: true
+    - name: Require a supplied credential for externally managed Redis
+      ansible.builtin.assert:
+        that: existing_redis.status == 200 or local_redis.stat.exists
+        fail_msg: Supply the existing external Redis credential before production reconciliation
+      when: external_redis | default(false) | bool
+      no_log: true
+    - name: Generate only an absent local Redis credential
+      ansible.builtin.command:
+        argv: [openssl, rand, -hex, '32']
+      when: existing_redis.status == 404 and not local_redis.stat.exists and not (external_redis | default(false) | bool)
+      register: fresh_redis
+      no_log: true
+    - name: Store the canonical or freshly generated Redis password once
+      ansible.builtin.copy:
+        dest: "{{ local }}/redis/password"
+        content: "{{ existing_redis.json.data.data.password if existing_redis.status == 200 else fresh_redis.stdout }}"
+        mode: '0600'
+        force: false
+      when: not local_redis.stat.exists
+      no_log: true
+    - name: Refuse mismatched existing Redis credentials
+      ansible.builtin.assert:
+        that: lookup('file',local ~ '/redis/password') | trim == existing_redis.json.data.data.password
+        fail_msg: Redis bootstrap file differs from the existing Vault secret; reconcile explicitly
+      when: existing_redis.status == 200
+      no_log: true
+    - name: Render local Redis configuration with quoted password escaping
+      ansible.builtin.copy:
+        dest: "{{ local }}/redis/redis.conf"
+        content: |
+          bind 0.0.0.0
+          protected-mode yes
+          requirepass {{ lookup('file',local ~ '/redis/password') | trim | to_json }}
+          save ""
+          appendonly no
+          loglevel warning
+        mode: '0600'
+      no_log: true

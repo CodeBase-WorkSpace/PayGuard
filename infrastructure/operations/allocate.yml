@@ -1,0 +1,36 @@
+---
+- name: Allocate explicitly named volumes only for a new isolated target
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+  tasks:
+    - name: Require a new target ceremony
+      ansible.builtin.assert:
+        that:
+          - fresh_target | default(false) | bool
+          - lookup('env','COMPOSE_PROJECT_NAME') is match('^[a-z0-9][a-z0-9_-]+$')
+    - name: Resolve external volume names
+      ansible.builtin.command:
+        argv: [docker, compose, -f, "{{ repo }}/docker-compose.yaml", config, --format, json]
+      register: resolved
+      changed_when: false
+      no_log: true
+    - name: Inspect all requested volumes before allocating any
+      ansible.builtin.command:
+        argv: [docker, volume, inspect, "{{ item }}"]
+      loop: "{{ (resolved.stdout | from_json).volumes | dict2items | map(attribute='value.name') | list }}"
+      register: existing
+      failed_when: false
+      changed_when: false
+      no_log: true
+    - name: Refuse allocation if any requested volume already exists
+      ansible.builtin.assert:
+        that: existing.results | selectattr('rc','equalto',0) | list | length == 0
+        fail_msg: Fresh allocation cannot adopt existing volumes; use adopt.yml
+    - name: Create the named fresh volumes
+      ansible.builtin.command:
+        argv: [docker, volume, create, --label, "payguard.project={{ lookup('env','COMPOSE_PROJECT_NAME') }}", "{{ item.item }}"]
+      loop: "{{ existing.results }}"
+      no_log: true
+- ansible.builtin.import_playbook: adopt.yml

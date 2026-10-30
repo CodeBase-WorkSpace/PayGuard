@@ -1,0 +1,249 @@
+---
+- name: Migrate one independently versioned database with native Agent and Flyway
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    runtime_root: "{{ lookup('env', 'PAYGUARD_RUNTIME_ROOT') }}"
+    operator_uid: "{{ lookup('env', 'PAYGUARD_LOCAL_UID') | int }}"
+    operator_gid: "{{ lookup('env', 'PAYGUARD_LOCAL_GID') | int }}"
+    compose:
+      - docker
+      - compose
+      - -f
+      - "{{ repo }}/docker-compose.yaml"
+      - -f
+      - "{{ repo }}/infrastructure/compose.operations.yaml"
+  tasks:
+    - name: Run bounded host and Vault preflight
+      ansible.builtin.import_tasks: preflight.yml
+
+    - name: Acquire one service migration lock atomically
+      ansible.builtin.command:
+        argv: [mkdir, "{{ runtime_root }}/migration-{{ service }}.lock"]
+      changed_when: true
+
+    - name: Create unique host-tmpfs attempt
+      ansible.builtin.tempfile:
+        state: directory
+        path: "{{ runtime_root }}"
+        prefix: "payguard-{{ service }}-"
+      register: attempt
+
+    - name: Restrict attempt and service directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ operator_uid }}"
+        group: "{{ operator_gid }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: "{{ attempt.path }}", mode: '0700'}
+        - {path: "{{ attempt.path }}/{{ service }}", mode: '0700'}
+        - {path: "{{ attempt.path }}/{{ service }}/private", mode: '0700'}
+        - {path: "{{ attempt.path }}/{{ service }}/handoff", mode: '0700'}
+      no_log: true
+
+    - name: Assign attempt identity
+      ansible.builtin.set_fact:
+        attempt_id: "{{ attempt.path | basename }}"
+        container_name: "payguard-agent-{{ attempt.path | basename }}"
+        receipt_path: "{{ repo }}/.local/payguard/operator/receipts/{{ attempt.path | basename }}.json"
+      no_log: true
+
+    - name: Write protected pre-auth recovery receipt
+      ansible.builtin.copy:
+        dest: "{{ receipt_path }}"
+        content: "{{ {'attempt': attempt_id, 'service': service, 'target': lookup('env','COMPOSE_PROJECT_NAME'), 'path': attempt.path, 'container': container_name, 'state': 'agent_running', 'token_accessor': '', 'lease_id': '', 'expires_unix': 0} | to_json }}\n"
+        owner: "{{ operator_uid }}"
+        group: "{{ operator_gid }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Deliver and admit credential
+      block:
+        - name: Start bounded one-shot Agent
+          ansible.builtin.set_fact:
+            agent_start_unix: "{{ lookup('pipe', 'date +%s') | int }}"
+
+        - name: Run only the selected Agent for at most 60 seconds
+          ansible.builtin.command:
+            argv: "{{ ['timeout', '-s', 'TERM', '-k', '5', (agent_timeout_seconds | default(60) | string)] + compose + ['run', '--rm', '--no-deps', '--name', container_name, 'agent-' ~ service] }}"
+            chdir: "{{ repo }}"
+          environment:
+            PAYGUARD_ATTEMPT_ROOT: "{{ attempt.path }}"
+            PAYGUARD_LOCAL_UID: "{{ operator_uid | string }}"
+            PAYGUARD_LOCAL_GID: "{{ operator_gid | string }}"
+            COMPOSE_PROJECT_NAME: "{{ lookup('env', 'COMPOSE_PROJECT_NAME') }}"
+          register: agent_run
+          failed_when: agent_run.rc != 0
+          no_log: true
+
+        - name: Check current credential and token file modes
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          loop:
+            - "{{ attempt.path }}/{{ service }}/handoff/credential.toml"
+            - "{{ attempt.path }}/{{ service }}/private/token"
+          register: generated
+          no_log: true
+
+        - name: Reject missing or exposed credential files
+          ansible.builtin.assert:
+            that:
+              - generated.results[0].stat.isreg
+              - generated.results[1].stat.isreg
+              - generated.results[0].stat.mode == '0440'
+              - generated.results[1].stat.mode == '0600'
+              - generated.results[0].stat.uid == operator_uid
+              - generated.results[1].stat.uid == operator_uid
+              - generated.results[0].stat.size > 100
+            fail_msg: Agent credential handoff is incomplete
+          no_log: true
+
+        - name: Read current credential metadata privately
+          ansible.builtin.slurp:
+            src: "{{ attempt.path }}/{{ service }}/handoff/credential.toml"
+          register: rendered
+          no_log: true
+
+        - name: Validate fixed target and credential fields
+          ansible.builtin.set_fact:
+            rendered_text: "{{ rendered.content | b64decode }}"
+            lease_seconds: "{{ (rendered.content | b64decode | regex_findall('(?m)^# lease_seconds=([0-9]+)$') | first) | int }}"
+            lease_id: "{{ rendered.content | b64decode | regex_findall('(?m)^# lease_id=([A-Za-z0-9/_-]+)$') | first }}"
+          no_log: true
+
+        - name: Reject stale or malformed handoff
+          ansible.builtin.assert:
+            that:
+              - rendered_text is search('(?m)^\[environments.default\]$')
+              - rendered_text is search('(?m)^url = "jdbc:postgresql://postgres-' ~ service ~ ':5432/payguard_' ~ service ~ '\?sslmode=verify-full&sslrootcert=/run/agent-ca/ca.crt&currentSchema=payguard"$')
+              - rendered_text is search('(?m)^user = ".+"$')
+              - rendered_text is search('(?m)^password = ".+"$')
+              - lease_seconds - (lookup('pipe', 'date +%s') | int) + (agent_start_unix | int) >= 840
+            fail_msg: Credential is malformed or has insufficient lease lifetime
+          no_log: true
+
+        - name: Check private Agent token lifetime over verified TLS
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/auth/token/lookup-self
+            ca_path: "{{ repo }}/.local/payguard/ca.crt"
+            validate_certs: true
+            headers:
+              X-Vault-Token: "{{ lookup('file', attempt.path ~ '/' ~ service ~ '/private/token') | trim }}"
+            status_code: 200
+            timeout: 5
+          register: token_lookup
+          no_log: true
+
+        - name: Reject insufficient token validity
+          ansible.builtin.assert:
+            that:
+              - token_lookup.json.data.ttl | int >= 840
+              - token_lookup.json.data.accessor | length > 0
+            fail_msg: Agent token has insufficient lifetime
+          no_log: true
+
+        - name: Complete protected recovery receipt
+          ansible.builtin.copy:
+            dest: "{{ receipt_path }}"
+            content: "{{ {'attempt': attempt_id, 'service': service, 'target': lookup('env','COMPOSE_PROJECT_NAME'), 'path': attempt.path, 'container': container_name, 'state': 'credentials_ready', 'token_accessor': token_lookup.json.data.accessor, 'lease_id': lease_id, 'expires_unix': (agent_start_unix | int) + (lease_seconds | int)} | to_json }}\n"
+            owner: "{{ operator_uid }}"
+            group: "{{ operator_gid }}"
+            mode: '0600'
+          no_log: true
+
+        - name: Keep the protected lease identifier out of the consumer handoff
+          ansible.builtin.copy:
+            dest: "{{ attempt.path }}/{{ service }}/handoff/credential.toml"
+            content: "{{ rendered_text | regex_replace('(?m)^# lease_id=[^\\n]*\\n', '') }}"
+            owner: "{{ operator_uid }}"
+            group: "{{ operator_gid }}"
+            mode: '0440'
+          no_log: true
+
+        - name: Run native Flyway under the remaining lease budget
+          ansible.builtin.command:
+            argv: "{{ ['timeout', '-s', 'TERM', '-k', '10', '600'] + compose + ['run', '--rm', '--no-deps', '--name', 'payguard-flyway-' ~ attempt_id, 'migrate-' ~ service] }}"
+            chdir: "{{ repo }}"
+          environment:
+            PAYGUARD_ATTEMPT_ROOT: "{{ attempt.path }}"
+            PAYGUARD_LOCAL_UID: "{{ operator_uid | string }}"
+            PAYGUARD_LOCAL_GID: "{{ operator_gid | string }}"
+            COMPOSE_PROJECT_NAME: "{{ lookup('env', 'COMPOSE_PROJECT_NAME') }}"
+          register: flyway_run
+          no_log: true
+
+        - name: Verify application grants and private history after Flyway
+          ansible.builtin.include_tasks: tasks/verify-migration.yml
+
+        - name: Record migration success before cleanup
+          ansible.builtin.set_fact:
+            migration_success: true
+
+      rescue:
+        - name: Retain migration failure without dependency diagnostics
+          ansible.builtin.set_fact:
+            migration_success: false
+      always:
+        - name: Stop only containers belonging to this attempt
+          ansible.builtin.command:
+            argv: [docker, rm, -f, "{{ item }}"]
+          loop: ["{{ container_name }}", "payguard-flyway-{{ attempt_id }}"]
+          failed_when: false
+          changed_when: false
+          no_log: true
+
+        - name: Check for the Agent sink token
+          ansible.builtin.stat:
+            path: "{{ attempt.path }}/{{ service }}/private/token"
+          register: cleanup_token
+          no_log: true
+
+        - name: Revoke this attempt token and its database leases
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/auth/token/revoke-self
+            method: POST
+            ca_path: "{{ repo }}/.local/payguard/ca.crt"
+            validate_certs: true
+            headers:
+              X-Vault-Token: "{{ lookup('file', attempt.path ~ '/' ~ service ~ '/private/token') | trim }}"
+            status_code: [200, 204]
+            timeout: 5
+          register: cleanup_revoke
+          ignore_errors: true
+          when: cleanup_token.stat.exists
+          no_log: true
+
+        - name: Record recoverable cleanup outcome
+          ansible.builtin.copy:
+            dest: "{{ receipt_path }}"
+            content: "{{ {'attempt': attempt_id, 'service': service, 'target': lookup('env','COMPOSE_PROJECT_NAME'), 'path': attempt.path, 'container': container_name, 'state': ('cleanup_verified' if (cleanup_token.stat.exists and cleanup_revoke is succeeded) else 'cleanup_pending'), 'migration_success': migration_success | default(false), 'token_accessor': token_lookup.json.data.accessor | default(''), 'lease_id': lease_id | default('')} | to_json }}\n"
+            mode: '0600'
+          no_log: true
+
+        - name: Remove temporary credentials only after confirmed revocation
+          ansible.builtin.file:
+            path: "{{ attempt.path }}"
+            state: absent
+          when: cleanup_token.stat.exists and cleanup_revoke is succeeded
+          no_log: true
+
+        - name: Release service lock only after verified cleanup
+          ansible.builtin.file:
+            path: "{{ runtime_root }}/migration-{{ service }}.lock"
+            state: absent
+          when: cleanup_token.stat.exists and cleanup_revoke is succeeded
+
+    - name: Require both migration and cleanup success
+      ansible.builtin.assert:
+        that:
+          - migration_success | default(false)
+          - cleanup_token.stat.exists
+          - cleanup_revoke is succeeded
+        fail_msg: Migration or cleanup failed; inspect the protected attempt receipt and use recover-attempt.yml
+
+    - name: Report sanitized migration completion
+      ansible.builtin.debug:
+        msg: "migration_complete service={{ service }} cleanup=verified"

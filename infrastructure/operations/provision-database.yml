@@ -1,0 +1,166 @@
+---
+- name: Reconcile four isolated PostgreSQL databases without resetting data
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    services: [identity, loan, collateral, wallet]
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+
+    - name: Require approved local project and protected admin inputs
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'COMPOSE_PROJECT_NAME') == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project
+          - repo | length > 0
+          - lookup('file', repo ~ '/.local/payguard/ca.crt') | length > 0
+        fail_msg: Database provisioning requires the approved local target and CA
+      no_log: true
+
+    - name: Check PostgreSQL 18 and current database identity over verified TLS
+      community.postgresql.postgresql_query:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        query: "SELECT current_database() AS db, current_setting('server_version_num')::int AS version"
+      loop: "{{ services }}"
+      register: database_identity
+      no_log: true
+
+    - name: Reject a wrong database or PostgreSQL major version
+      ansible.builtin.assert:
+        that:
+          - item.query_result[0].db == 'payguard_' ~ item.item
+          - item.query_result[0].version >= 180000
+          - item.query_result[0].version < 190000
+      loop: "{{ database_identity.results }}"
+      no_log: true
+
+    - name: Create or preserve owner groups
+      community.postgresql.postgresql_user:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        name: "{{ item }}_owner"
+        role_attr_flags: NOLOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION,NOBYPASSRLS
+      loop: "{{ services }}"
+      no_log: true
+
+    - name: Create or preserve runtime groups
+      community.postgresql.postgresql_user:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        name: "{{ item }}_runtime"
+        role_attr_flags: NOLOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION,NOBYPASSRLS
+      loop: "{{ services }}"
+      no_log: true
+
+    - name: Check whether manager already exists
+      community.postgresql.postgresql_query:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        query: "SELECT count(*)::int AS found FROM pg_roles WHERE rolname = 'vault_manager'"
+      loop: "{{ services }}"
+      register: managers
+      no_log: true
+
+    - name: Create manager only when absent
+      community.postgresql.postgresql_user:
+        login_host: "postgres-{{ item.item }}"
+        login_db: "payguard_{{ item.item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item.item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        name: vault_manager
+        role_attr_flags: CREATEROLE,LOGIN,NOINHERIT,NOSUPERUSER,NOCREATEDB,NOREPLICATION,NOBYPASSRLS
+        password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item.item ~ '/manager-password', errors='ignore') | default((lookup('file', repo ~ '/.local/payguard/' ~ item.item ~ '/credentials.json', errors='ignore') | default('{}', true) | from_json).manager | default(''), true) | trim }}"
+      loop: "{{ managers.results }}"
+      when: item.query_result[0].found == 0
+      no_log: true
+
+    - name: Preserve manager password while reconciling role flags
+      community.postgresql.postgresql_user:
+        login_host: "postgres-{{ item.item }}"
+        login_db: "payguard_{{ item.item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item.item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        name: vault_manager
+        role_attr_flags: CREATEROLE,LOGIN,NOINHERIT,NOSUPERUSER,NOCREATEDB,NOREPLICATION,NOBYPASSRLS
+        no_password_changes: true
+      loop: "{{ managers.results }}"
+      when: item.query_result[0].found > 0
+      no_log: true
+
+    - name: Reconcile private schema ownership
+      community.postgresql.postgresql_schema:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        name: payguard
+        owner: "{{ item }}_owner"
+      loop: "{{ services }}"
+      no_log: true
+
+    - name: Reconcile only fixed database and default grants
+      community.postgresql.postgresql_query:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        query:
+          - "REVOKE ALL ON DATABASE payguard_{{ item }} FROM PUBLIC"
+          - "REVOKE ALL ON SCHEMA public FROM PUBLIC"
+          - "GRANT {{ item }}_owner, {{ item }}_runtime TO vault_manager WITH ADMIN TRUE, INHERIT FALSE, SET FALSE"
+          - "GRANT CONNECT ON DATABASE payguard_{{ item }} TO {{ item }}_owner, {{ item }}_runtime"
+          - "GRANT CONNECT ON DATABASE payguard_{{ item }} TO vault_manager WITH GRANT OPTION"
+          - "GRANT USAGE ON SCHEMA payguard TO {{ item }}_runtime, vault_manager"
+          - "ALTER DEFAULT PRIVILEGES FOR ROLE {{ item }}_owner IN SCHEMA payguard REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM {{ item }}_runtime"
+          - "ALTER DEFAULT PRIVILEGES FOR ROLE {{ item }}_owner IN SCHEMA payguard GRANT USAGE, SELECT ON SEQUENCES TO {{ item }}_runtime"
+          - "ALTER DEFAULT PRIVILEGES FOR ROLE {{ item }}_owner REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC"
+      loop: "{{ services }}"
+      no_log: true
+
+    - name: Retain existing object ownership and refuse unexpected schema owners
+      community.postgresql.postgresql_query:
+        login_host: "postgres-{{ item }}"
+        login_db: "payguard_{{ item }}"
+        login_user: postgres
+        login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ item ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        query: |
+          SELECT count(*)::int AS unexpected FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='payguard' AND pg_get_userbyid(c.relowner) <> '{{ item }}_owner'
+      loop: "{{ services }}"
+      register: object_owners
+      no_log: true
+
+    - name: Refuse automatic ownership transfer of adopted data
+      ansible.builtin.assert:
+        that: item.query_result[0].unexpected == 0
+        fail_msg: Existing schema objects have unexpected ownership; reconcile explicitly before migration
+      loop: "{{ object_owners.results }}"
+      no_log: true

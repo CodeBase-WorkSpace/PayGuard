@@ -1,0 +1,76 @@
+---
+- name: Restore a database backup into an empty isolated recovery target
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+    - name: Require an isolated recovery project and an exact expected backup hash
+      ansible.builtin.assert:
+        that:
+          - lookup('env','COMPOSE_PROJECT_NAME') is match('^payguard-recovery-[a-z0-9-]+$')
+          - service in ['identity','wallet','loan','collateral']
+          - backup_sha256 is match('^[a-f0-9]{64}$')
+          - backup_file is match('^/[^\n]+$')
+    - name: Verify backup bytes before restoration
+      ansible.builtin.stat:
+        path: "{{ backup_file }}"
+        checksum_algorithm: sha256
+      register: backup
+      no_log: true
+    - name: Refuse changed backup bytes
+      ansible.builtin.assert:
+        that:
+          - backup.stat.isreg
+          - backup.stat.checksum == backup_sha256
+      no_log: true
+    - name: Require an empty destination schema
+      community.postgresql.postgresql_query:
+        login_host: "postgres-{{ service }}"
+        login_db: "payguard_{{ service }}"
+        login_user: postgres
+        login_password: "{{ lookup('file',repo ~ '/.local/payguard/' ~ service ~ '/admin-password') | trim }}"
+        ssl_mode: verify-full
+        ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+        query: SELECT count(*)::int AS objects FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='payguard'
+      register: destination
+      no_log: true
+    - name: Refuse replacing any populated destination
+      ansible.builtin.assert:
+        that: destination.query_result[0].objects == 0
+      no_log: true
+    - name: Restore under stable owner and always remove temporary schema-creation permission
+      block:
+        - name: Temporarily permit native schema restoration
+          community.postgresql.postgresql_query:
+            login_host: "postgres-{{ service }}"
+            login_db: "payguard_{{ service }}"
+            login_user: postgres
+            login_password: "{{ lookup('file',repo ~ '/.local/payguard/' ~ service ~ '/admin-password') | trim }}"
+            ssl_mode: verify-full
+            ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+            query: "GRANT CREATE ON DATABASE payguard_{{ service }} TO {{ service }}_owner; DROP SCHEMA payguard"
+          no_log: true
+        - name: Restore backup atomically using native pg_restore
+          ansible.builtin.shell: >-
+            docker compose -f {{ (repo ~ '/docker-compose.yaml') | quote }}
+            exec -T -u postgres postgres-{{ service }}
+            pg_restore -U postgres -d payguard_{{ service }} --single-transaction
+            --no-owner --role={{ service }}_owner
+            < {{ backup_file | quote }}
+          no_log: true
+      always:
+        - name: Remove the temporary database permission
+          community.postgresql.postgresql_query:
+            login_host: "postgres-{{ service }}"
+            login_db: "payguard_{{ service }}"
+            login_user: postgres
+            login_password: "{{ lookup('file',repo ~ '/.local/payguard/' ~ service ~ '/admin-password') | trim }}"
+            ssl_mode: verify-full
+            ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+            query: "REVOKE CREATE ON DATABASE payguard_{{ service }} FROM {{ service }}_owner"
+          no_log: true
+    - name: Verify restored history and stable ownership
+      ansible.builtin.include_tasks: tasks/verify-migration.yml

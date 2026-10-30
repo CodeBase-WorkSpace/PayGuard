@@ -1,0 +1,217 @@
+---
+- name: Explicit Vault first initialization, unseal, or scoped operator recovery
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    ca: "{{ repo }}/.local/payguard/ca.crt"
+    operator_dir: "{{ repo }}/.local/payguard/operator"
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+
+    - name: Require one explicit ceremony and the approved project
+      ansible.builtin.assert:
+        that:
+          - operation | default('') in ['initialize', 'unseal', 'recover-operator']
+          - lookup('env', 'COMPOSE_PROJECT_NAME') == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project
+        fail_msg: Select an explicit Vault ceremony on the approved project
+
+    - name: Read Vault initialization state over verified TLS
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/init
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      register: init_state
+      until: init_state.status == 200
+      retries: 10
+      delay: 2
+      changed_when: false
+      no_log: true
+
+    - name: Refuse initialization of persisted Raft state
+      ansible.builtin.assert:
+        that:
+          - not init_state.json.initialized
+          - fresh_target | default(false) | bool
+        fail_msg: Existing Vault data cannot be initialized again
+      when: operation == 'initialize'
+
+    - name: Refuse unseal or recovery before first initialization
+      ansible.builtin.assert:
+        that:
+          - init_state.json.initialized
+        fail_msg: Vault has no initialized state
+      when: operation != 'initialize'
+
+    - name: Require separated PGP custodians for production initialization
+      ansible.builtin.assert:
+        that:
+          - (recovery_pgp_keys | default([]) | length) == 3
+          - (root_token_pgp_key | default('') | length) > 0
+        fail_msg: Production initialization requires three custodian PGP keys and a root-token PGP key; local_rehearsal is for disposable fixtures only
+      when: operation == 'initialize' and not (local_rehearsal | default(false) | bool)
+      no_log: true
+
+    - name: Initialize only a new Vault with the approved threshold
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/init
+        method: POST
+        body_format: json
+        body:
+          secret_shares: 3
+          secret_threshold: 2
+          pgp_keys: "{{ recovery_pgp_keys | default(omit) }}"
+          root_token_pgp_key: "{{ root_token_pgp_key | default(omit) }}"
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 15
+      register: initialized
+      when: operation == 'initialize'
+      no_log: true
+
+    - name: Persist fresh recovery shares only in the protected operator directory
+      ansible.builtin.copy:
+        dest: "{{ operator_dir }}/initialization.json"
+        content: "{{ {'keys': initialized.json['keys'], 'keys_base64': initialized.json['keys_base64'], 'secret_threshold': 2, 'encrypted_root_token': (initialized.json.root_token if not (local_rehearsal | default(false) | bool) else '')} | to_json }}\n"
+        mode: '0600'
+      when: operation == 'initialize'
+      no_log: true
+
+    - name: Read current seal state
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/seal-status
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      register: seal_state
+      changed_when: false
+      no_log: true
+
+    - name: Require protected custodian inputs for production unseal
+      ansible.builtin.assert:
+        that: (unseal_key_files | default([]) | length) >= 2
+        fail_msg: Supply two separate protected custodian key files; automatic fixture-share loading is disabled for production
+      when: operation == 'unseal' and not (local_rehearsal | default(false) | bool)
+      no_log: true
+
+    - name: Unseal explicitly with the existing protected threshold shares
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/unseal
+        method: POST
+        body_format: json
+        body:
+          key: "{{ lookup('file', unseal_key_files[item]) | trim if operation == 'unseal' and not (local_rehearsal | default(false) | bool) else (initialized.json['keys'] if operation == 'initialize' else (lookup('file', operator_dir ~ '/initialization.json') | from_json)['keys'])[item] }}"
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      loop: [0, 1]
+      when: (operation == 'unseal' or (operation == 'initialize' and local_rehearsal | default(false) | bool)) and seal_state.json.sealed
+      no_log: true
+
+    - name: Require a protected temporary root token for recovery
+      ansible.builtin.stat:
+        path: "{{ operator_dir }}/bootstrap-root"
+      register: recovery_root
+      when: operation == 'recover-operator'
+      no_log: true
+
+    - name: Refuse recovery without a protected native generate-root result
+      ansible.builtin.assert:
+        that:
+          - recovery_root.stat.exists
+          - recovery_root.stat.mode == '0600'
+        fail_msg: Complete the native Vault threshold generate-root ceremony and protect bootstrap-root before recovery
+      when: operation == 'recover-operator'
+
+    - name: Select only the temporary root for scoped operator issuance
+      ansible.builtin.set_fact:
+        temporary_root: "{{ initialized.json.root_token if operation == 'initialize' else lookup('file', operator_dir ~ '/bootstrap-root') | trim }}"
+      when: operation == 'recover-operator' or (operation == 'initialize' and local_rehearsal | default(false) | bool)
+      no_log: true
+
+    - name: Issue scoped operator authority and always revoke temporary root
+      block:
+        - name: Install the scoped operator policy under temporary root authority
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/sys/policies/acl/local-operator
+            method: POST
+            body_format: json
+            body:
+              policy: |
+                path "auth/token/lookup-self" { capabilities = ["read"] }
+                path "auth/token/renew-self" { capabilities = ["update"] }
+                path "auth/token/revoke-self" { capabilities = ["update"] }
+                path "sys/storage/raft/snapshot" { capabilities = ["read", "sudo"] }
+                path "sys/mounts" { capabilities = ["read", "sudo"] }
+                path "sys/auth" { capabilities = ["read", "sudo"] }
+                path "sys/audit" { capabilities = ["read", "sudo"] }
+                path "sys/mounts/*" { capabilities = ["create", "read", "update", "sudo"] }
+                path "sys/auth/approle" { capabilities = ["create", "read", "update", "sudo"] }
+                path "sys/audit/file" { capabilities = ["create", "read", "update", "sudo"] }
+                path "sys/policies/acl/local-*" { capabilities = ["create", "read", "update", "sudo"] }
+                path "database/config/local-*" { capabilities = ["create", "read", "update", "list"] }
+                path "database/roles/local-*" { capabilities = ["create", "read", "update", "list"] }
+                path "database/rotate-root/local-*" { capabilities = ["update"] }
+                path "auth/approle/role/local-*" { capabilities = ["create", "read", "update", "list"] }
+                path "secret/data/local/*" { capabilities = ["create", "read", "update", "list"] }
+            headers: {X-Vault-Token: "{{ temporary_root }}"}
+            ca_path: "{{ ca }}"
+            validate_certs: true
+            status_code: [200, 204]
+            timeout: 5
+          when: operation == 'recover-operator' or (operation == 'initialize' and local_rehearsal | default(false) | bool)
+          no_log: true
+
+        - name: Issue a scoped renewable operator token
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/auth/token/create-orphan
+            method: POST
+            body_format: json
+            body: {policies: [local-operator], ttl: 8h, renewable: true}
+            headers: {X-Vault-Token: "{{ temporary_root }}"}
+            ca_path: "{{ ca }}"
+            validate_certs: true
+            status_code: 200
+            timeout: 5
+          register: scoped_operator
+          when: operation == 'recover-operator' or (operation == 'initialize' and local_rehearsal | default(false) | bool)
+          no_log: true
+
+        - name: Store only the scoped operator token
+          ansible.builtin.copy:
+            dest: "{{ operator_dir }}/token"
+            content: "{{ scoped_operator.json.auth.client_token }}\n"
+            mode: '0600'
+          when: operation == 'recover-operator' or (operation == 'initialize' and local_rehearsal | default(false) | bool)
+          no_log: true
+
+      always:
+        - name: Revoke the temporary root token
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/auth/token/revoke-self
+            method: POST
+            headers: {X-Vault-Token: "{{ temporary_root }}"}
+            ca_path: "{{ ca }}"
+            validate_certs: true
+            status_code: [200, 204]
+            timeout: 5
+          when: operation == 'recover-operator' or (operation == 'initialize' and local_rehearsal | default(false) | bool)
+          no_log: true
+
+        - name: Remove recovered temporary root file after revocation
+          ansible.builtin.file:
+            path: "{{ operator_dir }}/bootstrap-root"
+            state: absent
+          when: operation == 'recover-operator'
+          no_log: true
+
+
+    - name: Report ceremony without recovery material
+      ansible.builtin.debug:
+        msg: "Vault ceremony {{ operation }} completed; no root token retained"

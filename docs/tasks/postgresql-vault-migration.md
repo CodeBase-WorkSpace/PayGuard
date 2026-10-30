@@ -1,3 +1,5 @@
+> Historical record. This document is preserved as prior evidence; current implementation and test status are in `docs/infrastructure.md` and `docs/infrastructure-validation.md`.
+
 # PostgreSQL and Vault implementation work log
 
 Status: historical migration implementation/rehearsal record. Subsequent committed Identity integration passed full verification with 91 tests and all quality gates; see [the publication repair log](identity-publication-repair.md) for current source, publication and CI evidence. The results below describe the earlier full working checkout, including its then-unresolved PMD findings. Live-data and missing financial-adapter work remain outside the proven scope. Current source is authoritative.
@@ -33,10 +35,10 @@ Status: historical migration implementation/rehearsal record. Subsequent committ
 
 | Service | Actual owned source | Previous credentials | Result and evidence boundary |
 | --- | --- | --- | --- |
-| Identity | `payguard-identity-service/src/main/java/dev/amg/payguard/identity/verification/infrastructure/persistence`; actual JPA challenges/audit, Oracle V1/V2 | datasource environment and known pepper fallback | PostgreSQL final V1/scope V2, real adapter transactions/races, Vault pool/keys/seeds; one database for four package modules |
-| Loan | `payguard-loan-service/src/main/resources/db/legacy/oracle/V1__loan_schema.sql`; repository port, no concrete entity/adapter | datasource environment | PostgreSQL exact schema/Flyway/SQL fixtures and Vault pool; absent persisted business flows not invented |
-| Collateral | `payguard-collateral-service/src/main/resources/db/legacy/oracle/V1__collateral_schema.sql`; repository port, no concrete entity/adapter | datasource environment | PostgreSQL exact valuation schema/Flyway/fixtures and Vault pool; absent persisted business flows not invented |
-| Wallet | `payguard-wallet-service/pom.xml` OSS jOOQ dependency/domain/ports; no schema/adapter/codegen/generated source | datasource environment | PostgreSQL driver/POSTGRES dialect and Vault pool; no fabricated ledger schema or platform-wide financial concurrency claim |
+| Identity | `../../payguard-identity-service`; actual JPA challenges/audit, Oracle V1/V2 | datasource environment and known pepper fallback | PostgreSQL final V1/scope V2, real adapter transactions/races, Vault pool/keys/seeds; one database for four package modules |
+| Loan | `../../payguard-loan-service`; repository port, no concrete entity/adapter | datasource environment | PostgreSQL exact schema/Flyway/SQL fixtures and Vault pool; absent persisted business flows not invented |
+| Collateral | `../../payguard-collateral-service`; repository port, no concrete entity/adapter | datasource environment | PostgreSQL exact valuation schema/Flyway/fixtures and Vault pool; absent persisted business flows not invented |
+| Wallet | `../../payguard-wallet-service` OSS jOOQ dependency/domain/ports; no schema/adapter/codegen/generated source | datasource environment | PostgreSQL driver/POSTGRES dialect and Vault pool; no fabricated ledger schema or platform-wide financial concurrency claim |
 | Gateway / Proto | database-free modules | no database credentials | Remain database-free |
 
 ## Decisions and versions

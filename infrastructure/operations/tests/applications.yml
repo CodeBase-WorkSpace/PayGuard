@@ -1,0 +1,35 @@
+---
+- name: Verify actual packaged application readiness
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+    services: [identity, wallet, loan, collateral]
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: ../tasks/target.yml
+    - name: Wait for every application readiness group
+      ansible.builtin.uri:
+        url: "http://{{ item }}-service:{{ '8084' if item == 'identity' else '8080' }}/actuator/health/readiness"
+        status_code: 200
+        return_content: true
+        timeout: 3
+      register: readiness
+      until: readiness.status == 200 and readiness.json.status == 'UP'
+      retries: 30
+      delay: 2
+      loop: "{{ services }}"
+      no_log: true
+    - name: Confirm Compose never receives injected database credentials
+      ansible.builtin.command:
+        argv: [docker, compose, -f, "{{ repo }}/docker-compose.yaml", --profile, applications, config, --format, json]
+      register: config
+      changed_when: false
+      no_log: true
+    - name: Require credentials to remain Agent child-process values
+      ansible.builtin.assert:
+        that:
+          - "'SPRING_DATASOURCE_PASSWORD' not in (config.stdout | from_json).services[item ~ '-service'].environment"
+          - "'SPRING_DATASOURCE_USERNAME' not in (config.stdout | from_json).services[item ~ '-service'].environment"
+      loop: "{{ services }}"
+      no_log: true

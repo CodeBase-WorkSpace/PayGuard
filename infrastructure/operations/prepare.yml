@@ -1,0 +1,115 @@
+---
+- name: Prepare protected artifacts for a genuinely new local target
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    artifact_root: "{{ repo }}/.local/payguard"
+    services: [identity, loan, collateral, wallet]
+  tasks:
+    - name: Require explicit fresh target and refuse any existing artifact root
+      ansible.builtin.assert:
+        that:
+          - fresh_target | default(false) | bool
+          - lookup('env', 'COMPOSE_PROJECT_NAME') is match('^[a-z0-9][a-z0-9_-]+$')
+          - not (artifact_root is exists)
+        fail_msg: Fresh preparation refuses existing state or an unapproved project
+
+    - name: Create protected directories
+      ansible.builtin.file:
+        path: "{{ artifact_root }}/{{ item }}"
+        state: directory
+        mode: '0700'
+      loop: "{{ [''] + services + ['vault', 'operator', 'apps', 'operator/approle', 'operator/identity', 'operator/loan', 'operator/collateral', 'operator/wallet', 'operator/receipts', 'redis', 'kafka'] + (services | map('regex_replace', '^', 'apps/') | list) }}"
+
+    - name: Generate new local CA
+      ansible.builtin.command:
+        argv: [openssl, req, -x509, -newkey, rsa:3072, -nodes, -sha256, -days, '365', -subj, '/CN=PayGuard infrastructure CA', -addext, 'basicConstraints=critical,CA:TRUE', -addext, 'keyUsage=critical,keyCertSign,cRLSign', -keyout, "{{ artifact_root }}/ca.key", -out, "{{ artifact_root }}/ca.crt"]
+      no_log: true
+
+    - name: Generate each service key and CSR
+      ansible.builtin.command:
+        argv: [openssl, req, -new, -newkey, rsa:3072, -nodes, -keyout, "{{ artifact_root }}/{{ item }}/server.key", -out, "{{ artifact_root }}/{{ item }}/server.csr", -subj, "/CN=postgres-{{ item }}"]
+      loop: "{{ services }}"
+      no_log: true
+
+    - name: Sign each service certificate with its fixed SAN
+      ansible.builtin.command:
+        argv: [openssl, x509, -req, -in, "{{ artifact_root }}/{{ item }}/server.csr", -CA, "{{ artifact_root }}/ca.crt", -CAkey, "{{ artifact_root }}/ca.key", -CAcreateserial, -days, '365', -sha256, -extfile, /dev/stdin, -out, "{{ artifact_root }}/{{ item }}/server.crt"]
+        stdin: "basicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:postgres-{{ item }},DNS:localhost,IP:127.0.0.1\n"
+      loop: "{{ services }}"
+      no_log: true
+
+    - name: Generate Vault key and CSR
+      ansible.builtin.command:
+        argv: [openssl, req, -new, -newkey, rsa:3072, -nodes, -keyout, "{{ artifact_root }}/vault/server.key", -out, "{{ artifact_root }}/vault/server.csr", -subj, /CN=vault]
+      no_log: true
+
+    - name: Sign Vault certificate with local SANs
+      ansible.builtin.command:
+        argv: [openssl, x509, -req, -in, "{{ artifact_root }}/vault/server.csr", -CA, "{{ artifact_root }}/ca.crt", -CAkey, "{{ artifact_root }}/ca.key", -CAcreateserial, -days, '365', -sha256, -extfile, /dev/stdin, -out, "{{ artifact_root }}/vault/server.crt"]
+        stdin: "basicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:vault,DNS:localhost,IP:127.0.0.1\n"
+      no_log: true
+
+    - name: Generate fresh PostgreSQL admin and Vault manager passwords
+      ansible.builtin.command:
+        argv: [openssl, rand, -hex, '32']
+      loop: "{{ services | product(['admin-password', 'manager-password']) | list }}"
+      register: generated_passwords
+      no_log: true
+
+    - name: Store passwords in protected files only
+      ansible.builtin.copy:
+        dest: "{{ artifact_root }}/{{ item.item.0 }}/{{ item.item.1 }}"
+        content: "{{ item.stdout }}\n"
+        mode: '0600'
+      loop: "{{ generated_passwords.results }}"
+      no_log: true
+
+    - name: Copy CA for Vault server TLS
+      ansible.builtin.copy:
+        src: "{{ artifact_root }}/ca.crt"
+        dest: "{{ artifact_root }}/vault/ca.crt"
+        remote_src: true
+        mode: '0600'
+
+    - name: Generate fresh Redis authentication
+      ansible.builtin.command:
+        argv: [openssl, rand, -hex, '32']
+      register: redis_password
+      no_log: true
+
+    - name: Store fresh Redis password
+      ansible.builtin.copy:
+        dest: "{{ artifact_root }}/redis/password"
+        content: "{{ redis_password.stdout }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Configure Redis with file-only authentication
+      ansible.builtin.copy:
+        dest: "{{ artifact_root }}/redis/redis.conf"
+        content: |
+          bind 0.0.0.0
+          protected-mode yes
+          requirepass {{ redis_password.stdout }}
+          save ""
+          appendonly no
+          loglevel warning
+        mode: '0600'
+      no_log: true
+
+    - name: Find generated files
+      ansible.builtin.find:
+        paths: "{{ artifact_root }}"
+        recurse: true
+        file_type: file
+      register: generated_files
+      no_log: true
+
+    - name: Restrict generated files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        mode: '0600'
+      loop: "{{ generated_files.files }}"
+      no_log: true

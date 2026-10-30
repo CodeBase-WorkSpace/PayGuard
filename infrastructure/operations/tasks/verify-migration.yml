@@ -1,0 +1,28 @@
+---
+- name: Verify stable ownership and prevent runtime access to migration history
+  community.postgresql.postgresql_query:
+    login_host: "postgres-{{ service }}"
+    login_db: "payguard_{{ service }}"
+    login_user: postgres
+    login_password: "{{ lookup('file', repo ~ '/.local/payguard/' ~ service ~ '/admin-password') | trim }}"
+    ssl_mode: verify-full
+    ca_cert: "{{ repo }}/.local/payguard/ca.crt"
+    query: |
+      SELECT
+        EXISTS (SELECT 1 FROM payguard.flyway_schema_history WHERE success) AS migrated,
+        has_table_privilege('{{ service }}_runtime','payguard.flyway_schema_history','SELECT') AS history_read,
+        has_table_privilege('{{ service }}_runtime','payguard.flyway_schema_history','INSERT') AS history_write,
+        (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+         WHERE n.nspname='payguard' AND pg_get_userbyid(c.relowner)<>'{{ service }}_owner') AS wrong_owner
+  register: migration_verified
+  no_log: true
+
+- name: Reject incomplete migrations or unsafe object privileges
+  ansible.builtin.assert:
+    that:
+      - migration_verified.query_result[0].migrated
+      - not migration_verified.query_result[0].history_read
+      - not migration_verified.query_result[0].history_write
+      - migration_verified.query_result[0].wrong_owner | int == 0
+    fail_msg: Migration history, grants or stable ownership verification failed
+  no_log: true

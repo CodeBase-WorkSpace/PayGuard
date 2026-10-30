@@ -1,0 +1,147 @@
+---
+- name: Verify scoped Agent security without changing Vault configuration
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    ca: "{{ repo }}/.local/payguard/ca.crt"
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: ../tasks/target.yml
+    - name: Require the approved project
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'COMPOSE_PROJECT_NAME') == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project
+
+    - name: Restrict authentication failure probes to an actual isolated project
+      ansible.builtin.assert:
+        that: lookup('env','COMPOSE_PROJECT_NAME') is match('^payguard-it-[a-z0-9-]+$')
+      when: isolated_target | default(false) | bool
+
+    - name: Reject an unrelated CA before HTTP
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/sys/health
+        ca_path: /etc/ssl/cert.pem
+        validate_certs: true
+        timeout: 5
+      register: wrong_ca
+      ignore_errors: true
+      no_log: true
+
+    - name: Reject a wrong Vault hostname before HTTP
+      ansible.builtin.uri:
+        url: https://vault-invalid-san:8200/v1/sys/health
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        timeout: 5
+      register: wrong_san
+      ignore_errors: true
+      no_log: true
+
+    - name: Require both TLS refusals
+      ansible.builtin.assert:
+        that:
+          - wrong_ca is failed
+          - wrong_san is failed
+          - "'certificate' in (wrong_ca.msg | lower)"
+          - "'certificate' in (wrong_san.msg | lower)"
+        fail_msg: Vault TLS accepted an unrelated CA or hostname
+
+    - name: Log in once with the existing Identity migration AppRole
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/auth/approle/login
+        method: POST
+        body_format: json
+        body:
+          role_id: "{{ lookup('file', repo ~ '/.local/payguard/operator/identity/role-id') | trim }}"
+          secret_id: "{{ lookup('file', repo ~ '/.local/payguard/operator/identity/secret-id') | trim }}"
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      register: identity_login
+      no_log: true
+
+    - name: Probe cross-service denial and always revoke the probe token
+      block:
+        - name: Deny cross-service migration credential read
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/database/creds/local-loan-migration
+            headers: {X-Vault-Token: "{{ identity_login.json.auth.client_token }}"}
+            ca_path: "{{ ca }}"
+            validate_certs: true
+            status_code: 403
+            timeout: 5
+          register: denied_cross_service
+          no_log: true
+      always:
+        - name: Revoke only this test token
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/auth/token/revoke-self
+            method: POST
+            headers: {X-Vault-Token: "{{ identity_login.json.auth.client_token }}"}
+            ca_path: "{{ ca }}"
+            validate_certs: true
+            status_code: [200, 204]
+            timeout: 5
+          no_log: true
+
+    - name: Report only sanitized security checks
+      ansible.builtin.debug:
+        msg: wrong_ca=denied wrong_san=denied cross_service=denied token=revoked
+
+    - name: Reject missing SecretID only on an isolated target
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/auth/approle/login
+        method: POST
+        body_format: json
+        body:
+          role_id: "{{ lookup('file', repo ~ '/.local/payguard/operator/identity/role-id') | trim }}"
+          secret_id: 00000000-0000-0000-0000-000000000000
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [400, 403]
+        timeout: 5
+      when: isolated_target | default(false) | bool
+      no_log: true
+
+    - name: Issue an isolated one-second SecretID for expiry testing
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/auth/approle/role/local-identity-migration/secret-id
+        method: POST
+        body_format: json
+        body: {ttl: 1s}
+        headers:
+          X-Vault-Token: "{{ lookup('file', repo ~ '/.local/payguard/operator/token') | trim }}"
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 5
+      register: expiring_secret
+      when: isolated_target | default(false) | bool
+      no_log: true
+
+    - name: Wait only for the isolated test SecretID to expire
+      ansible.builtin.pause:
+        seconds: 2
+      when: isolated_target | default(false) | bool
+
+    - name: Reject the expired isolated SecretID
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/auth/approle/login
+        method: POST
+        body_format: json
+        body:
+          role_id: "{{ lookup('file', repo ~ '/.local/payguard/operator/identity/role-id') | trim }}"
+          secret_id: "{{ expiring_secret.json.data.secret_id }}"
+        ca_path: "{{ ca }}"
+        validate_certs: true
+        status_code: [400, 403]
+        timeout: 5
+      when: isolated_target | default(false) | bool
+      no_log: true
+
+    - name: Report isolated authentication refusals
+      ansible.builtin.debug:
+        msg: missing_secret=denied expired_secret=denied
+      when: isolated_target | default(false) | bool

@@ -1,241 +1,602 @@
+# External volumes preserve the existing deployment identities.
 name: ${COMPOSE_PROJECT_NAME:-payguard}
-
 services:
-  postgres-wallet:
-    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
-    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
-    environment:
-      POSTGRES_DB: payguard_wallet
-      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
-    volumes:
-      - postgres_wallet_data:/var/lib/postgresql/data
-      - ./.local/payguard/wallet:/run/payguard:ro
-      - ./infrastructure/postgresql/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
-      - ./infrastructure/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "payguard_wallet"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks: [database]
-
-  postgres-loan:
-    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
-    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
-    environment:
-      POSTGRES_DB: payguard_loan
-      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
-    volumes:
-      - postgres_loan_data:/var/lib/postgresql/data
-      - ./.local/payguard/loan:/run/payguard:ro
-      - ./infrastructure/postgresql/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
-      - ./infrastructure/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "payguard_loan"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks: [database]
-
-  postgres-collateral:
-    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
-    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
-    environment:
-      POSTGRES_DB: payguard_collateral
-      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
-    volumes:
-      - postgres_collateral_data:/var/lib/postgresql/data
-      - ./.local/payguard/collateral:/run/payguard:ro
-      - ./infrastructure/postgresql/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
-      - ./infrastructure/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "payguard_collateral"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks: [database]
-
   postgres-identity:
-    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
-    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
+    image: postgres:18-alpine@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+    restart: unless-stopped
+    entrypoint:
+    - /bin/sh
+    - /opt/payguard/entrypoint.sh
     environment:
       POSTGRES_DB: payguard_identity
       POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
+      PGDATA: ${PAYGUARD_PGDATA:-/var/lib/postgresql/18/docker}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=peer
     volumes:
-      - postgres_identity_data:/var/lib/postgresql/data
-      - ./.local/payguard/identity:/run/payguard:ro
-      - ./infrastructure/postgresql/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
-      - ./infrastructure/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    - postgres_identity_data:/var/lib/postgresql
+    - type: bind
+      source: ./.local/payguard/identity
+      target: /run/payguard
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/postgresql/entrypoint.sh
+      target: /opt/payguard/entrypoint.sh
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/postgresql/pg_hba.conf
+      target: /etc/postgresql/pg_hba.conf
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /run/postgresql:rw,nosuid,nodev
+    - /run/postgres-tls:rw,noexec,nosuid,nodev,mode=0700
+    security_opt:
+    - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "payguard_identity"]
+      test:
+      - CMD
+      - pg_isready
+      - -U
+      - postgres
+      - -d
+      - payguard_identity
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks:
+    - database
+  postgres-wallet:
+    image: postgres:18-alpine@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+    restart: unless-stopped
+    entrypoint:
+    - /bin/sh
+    - /opt/payguard/entrypoint.sh
+    environment:
+      POSTGRES_DB: payguard_wallet
+      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
+      PGDATA: ${PAYGUARD_PGDATA:-/var/lib/postgresql/18/docker}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=peer
+    volumes:
+    - postgres_wallet_data:/var/lib/postgresql
+    - type: bind
+      source: ./.local/payguard/wallet
+      target: /run/payguard
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/postgresql/entrypoint.sh
+      target: /opt/payguard/entrypoint.sh
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/postgresql/pg_hba.conf
+      target: /etc/postgresql/pg_hba.conf
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /run/postgresql:rw,nosuid,nodev
+    - /run/postgres-tls:rw,noexec,nosuid,nodev,mode=0700
+    security_opt:
+    - no-new-privileges:true
+    healthcheck:
+      test:
+      - CMD
+      - pg_isready
+      - -U
+      - postgres
+      - -d
+      - payguard_wallet
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks:
+    - database
+  postgres-loan:
+    image: postgres:18-alpine@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+    restart: unless-stopped
+    entrypoint:
+    - /bin/sh
+    - /opt/payguard/entrypoint.sh
+    environment:
+      POSTGRES_DB: payguard_loan
+      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
+      PGDATA: ${PAYGUARD_PGDATA:-/var/lib/postgresql/18/docker}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=peer
+    volumes:
+    - postgres_loan_data:/var/lib/postgresql
+    - type: bind
+      source: ./.local/payguard/loan
+      target: /run/payguard
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/postgresql/entrypoint.sh
+      target: /opt/payguard/entrypoint.sh
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/postgresql/pg_hba.conf
+      target: /etc/postgresql/pg_hba.conf
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /run/postgresql:rw,nosuid,nodev
+    - /run/postgres-tls:rw,noexec,nosuid,nodev,mode=0700
+    security_opt:
+    - no-new-privileges:true
+    healthcheck:
+      test:
+      - CMD
+      - pg_isready
+      - -U
+      - postgres
+      - -d
+      - payguard_loan
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks:
+    - database
+  postgres-collateral:
+    image: postgres:18-alpine@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+    restart: unless-stopped
+    entrypoint:
+    - /bin/sh
+    - /opt/payguard/entrypoint.sh
+    environment:
+      POSTGRES_DB: payguard_collateral
+      POSTGRES_PASSWORD_FILE: /run/payguard/admin-password
+      PGDATA: ${PAYGUARD_PGDATA:-/var/lib/postgresql/18/docker}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=peer
+    volumes:
+    - postgres_collateral_data:/var/lib/postgresql
+    - type: bind
+      source: ./.local/payguard/collateral
+      target: /run/payguard
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/postgresql/entrypoint.sh
+      target: /opt/payguard/entrypoint.sh
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/postgresql/pg_hba.conf
+      target: /etc/postgresql/pg_hba.conf
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /run/postgresql:rw,nosuid,nodev
+    - /run/postgres-tls:rw,noexec,nosuid,nodev,mode=0700
+    security_opt:
+    - no-new-privileges:true
+    healthcheck:
+      test:
+      - CMD
+      - pg_isready
+      - -U
+      - postgres
+      - -d
+      - payguard_collateral
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks:
+    - database
+  vault:
+    image: hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
+    restart: unless-stopped
+    user: 0:0
+    entrypoint:
+    - /bin/sh
+    - /opt/payguard/entrypoint.sh
+    ports:
+    - 127.0.0.1:${VAULT_PORT:-8200}:8200
+    environment:
+      VAULT_ADDR: https://127.0.0.1:8200
+      VAULT_CACERT: /vault/tls/ca.crt
+    volumes:
+    - vault_data:/vault/data
+    - vault_audit:/vault/audit
+    - type: bind
+      source: ./.local/payguard/vault
+      target: /run/payguard
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/vault/server.hcl
+      target: /vault/config/server.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/vault/entrypoint.sh
+      target: /opt/payguard/entrypoint.sh
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /vault/tls:rw,noexec,nosuid,nodev,mode=0700
+    - /tmp:rw,noexec,nosuid,nodev
+    security_opt:
+    - no-new-privileges:true
+    networks:
+      database: {}
+      operations:
+        aliases:
+        - vault-invalid-san
+    healthcheck:
+      test:
+      - CMD
+      - vault
+      - status
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:8.0.3-alpine@sha256:25c0ae32c6c2301798579f5944af53729766a18eff5660bbef196fc2e6214a9c
+    restart: unless-stopped
+    command:
+    - redis-server
+    - /run/redis/redis.conf
+    volumes:
+    - type: bind
+      source: ./.local/payguard/redis
+      target: /run/redis
+      read_only: true
+      bind:
+        create_host_path: false
+    networks:
+    - database
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - REDISCLI_AUTH="$$(cat /run/redis/password)" redis-cli ping | grep -q PONG
       interval: 5s
       timeout: 3s
       retries: 20
-    networks: [database]
-
-  vault:
-    image: hashicorp/vault:2.1.2@sha256:c2f666266f383d2cf424d86b8bb8ce7d065562173ffec2b476d762943608bb55
-    user: "0:0"
-    environment:
-      SKIP_SETCAP: "1"
-      SKIP_CHOWN: "1"
-    entrypoint: ["/bin/sh", "/opt/payguard/entrypoint.sh"]
-    ports: ["127.0.0.1:${VAULT_PORT:-8200}:8200"]
-    volumes:
-      - vault_data:/vault/data
-      - vault_audit:/vault/audit
-      - ./.local/payguard/vault:/run/payguard:ro
-      - ./infrastructure/vault/server.hcl:/vault/config/server.hcl:ro
-      - ./infrastructure/vault/entrypoint.sh:/opt/payguard/entrypoint.sh:ro
-    networks: [database, operations]
-
-  redis:
-    image: redis:8.0.3-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    networks: [database]
-
+    security_opt:
+    - no-new-privileges:true
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev
+    working_dir: /tmp
   kafka-init:
-    image: apache/kafka:4.0.1
-    user: "0:0"
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["chown 1000:1000 /tmp/kraft-combined-logs"]
+    image: apache/kafka:4.0.1@sha256:9a129e03121d46d74349a480f8f17082df3dd411b28281c9eabb95cf096370b9
+    user: 0:0
+    entrypoint:
+    - /bin/sh
+    - -ec
+    command:
+    - chown 1000:1000 /tmp/kraft-combined-logs
     volumes:
-      - kafka_data:/tmp/kraft-combined-logs
-
+    - kafka_data:/tmp/kraft-combined-logs
+    network_mode: none
+    restart: 'no'
   kafka:
-    image: apache/kafka:4.0.1
-    networks: [database]
-    container_name: ${COMPOSE_PROJECT_NAME:-payguard}-kafka
+    image: apache/kafka:4.0.1@sha256:9a129e03121d46d74349a480f8f17082df3dd411b28281c9eabb95cf096370b9
+    restart: unless-stopped
     depends_on:
-      kafka-init: { condition: service_completed_successfully }
-    ports:
-      - "${KAFKA_PORT:-9092}:9092"
+      kafka-init:
+        condition: service_completed_successfully
+    networks:
+    - database
     environment:
-      KAFKA_NODE_ID: 1
+      KAFKA_NODE_ID: '1'
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:${KAFKA_PORT:-9092}
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: '1'
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: '1'
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: '0'
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
       CLUSTER_ID: MDEyMzQ1Njc4OWFiY2RlZg
+    volumes:
+    - kafka_data:/tmp/kraft-combined-logs
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list"]
+      test:
+      - CMD
+      - /opt/kafka/bin/kafka-topics.sh
+      - --bootstrap-server
+      - kafka:29092
+      - --list
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 20s
-    volumes:
-      - kafka_data:/tmp/kraft-combined-logs
-
-  wallet-service:
-    profiles: [applications]
-    build:
-      context: .
-      dockerfile: payguard-wallet-service/Dockerfile
-    user: "${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}"
-    ports: ["127.0.0.1:8081:8080"]
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-wallet:5432/payguard_wallet?sslmode=verify-full&sslrootcert=/run/payguard/ca.crt&currentSchema=payguard
-      VAULT_ADDR: https://vault:8200
-      VAULT_CA_FILE: /run/payguard/ca.crt
-      VAULT_ROLE_ID_FILE: /run/payguard/approle/role-id
-      VAULT_SECRET_ID_FILE: /run/payguard/approle/secret-id
-      REDIS_HOST: redis
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-    volumes:
-      - ./.local/payguard/apps/wallet:/run/payguard/approle:ro
-      - ./.local/payguard/ca.crt:/run/payguard/ca.crt:ro
-    depends_on:
-      postgres-wallet: {condition: service_healthy}
-    networks: [database, operations]
-
-  loan-service:
-    profiles: [applications]
-    build:
-      context: .
-      dockerfile: payguard-loan-service/Dockerfile
-    user: "${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}"
-    ports: ["127.0.0.1:8082:8080"]
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-loan:5432/payguard_loan?sslmode=verify-full&sslrootcert=/run/payguard/ca.crt&currentSchema=payguard
-      VAULT_ADDR: https://vault:8200
-      VAULT_CA_FILE: /run/payguard/ca.crt
-      VAULT_ROLE_ID_FILE: /run/payguard/approle/role-id
-      VAULT_SECRET_ID_FILE: /run/payguard/approle/secret-id
-      REDIS_HOST: redis
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-    volumes:
-      - ./.local/payguard/apps/loan:/run/payguard/approle:ro
-      - ./.local/payguard/ca.crt:/run/payguard/ca.crt:ro
-    depends_on:
-      postgres-loan: {condition: service_healthy}
-    networks: [database, operations]
-
-  collateral-service:
-    profiles: [applications]
-    build:
-      context: .
-      dockerfile: payguard-collateral-service/Dockerfile
-    user: "${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}"
-    ports: ["127.0.0.1:8083:8080"]
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-collateral:5432/payguard_collateral?sslmode=verify-full&sslrootcert=/run/payguard/ca.crt&currentSchema=payguard
-      VAULT_ADDR: https://vault:8200
-      VAULT_CA_FILE: /run/payguard/ca.crt
-      VAULT_ROLE_ID_FILE: /run/payguard/approle/role-id
-      VAULT_SECRET_ID_FILE: /run/payguard/approle/secret-id
-      REDIS_HOST: redis
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-    volumes:
-      - ./.local/payguard/apps/collateral:/run/payguard/approle:ro
-      - ./.local/payguard/ca.crt:/run/payguard/ca.crt:ro
-    depends_on:
-      postgres-collateral: {condition: service_healthy}
-    networks: [database, operations]
-
+      retries: 20
   identity-service:
-    profiles: [applications]
+    read_only: true
+    cap_drop: &id001
+    - ALL
+    security_opt: &id002
+    - no-new-privileges:true
+    profiles:
+    - applications
     build:
       context: .
-      dockerfile: payguard-identity-service/Dockerfile
-    user: "${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}"
-    ports: ["127.0.0.1:8084:8084"]
+      dockerfile: infrastructure/application.Dockerfile
+      args:
+        SERVICE: identity
+    restart: unless-stopped
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/runtime.hcl
+    - -log-level=error
+    stop_grace_period: 40s
+    ports:
+    - 127.0.0.1:8084:8084
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-identity:5432/payguard_identity?sslmode=verify-full&sslrootcert=/run/payguard/ca.crt&currentSchema=payguard
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-identity:5432/payguard_identity?sslmode=verify-full&sslrootcert=/etc/vault/ca.crt&currentSchema=payguard
       VAULT_ADDR: https://vault:8200
-      VAULT_CA_FILE: /run/payguard/ca.crt
-      VAULT_ROLE_ID_FILE: /run/payguard/approle/role-id
-      VAULT_SECRET_ID_FILE: /run/payguard/approle/secret-id
+      VAULT_CA_FILE: /etc/vault/ca.crt
+      VAULT_TOKEN_FILE: /run/agent/token
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     volumes:
-      - ./.local/payguard/apps/identity:/run/payguard/approle:ro
-      - ./.local/payguard/ca.crt:/run/payguard/ca.crt:ro
+    - type: bind
+      source: ./.local/payguard/apps/identity
+      target: /run/agent-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/vault/runtime/identity.hcl
+      target: /etc/vault/runtime.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /run/agent:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
     depends_on:
-      postgres-identity: {condition: service_healthy}
-    networks: [database, operations]
-
+      postgres-identity:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+    - database
+    - operations
+  wallet-service:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - applications
+    build:
+      context: .
+      dockerfile: infrastructure/application.Dockerfile
+      args:
+        SERVICE: wallet
+    restart: unless-stopped
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/runtime.hcl
+    - -log-level=error
+    stop_grace_period: 40s
+    ports:
+    - 127.0.0.1:8081:8080
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-wallet:5432/payguard_wallet?sslmode=verify-full&sslrootcert=/etc/vault/ca.crt&currentSchema=payguard
+      VAULT_ADDR: https://vault:8200
+      VAULT_CA_FILE: /etc/vault/ca.crt
+      VAULT_TOKEN_FILE: /run/agent/token
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+    - type: bind
+      source: ./.local/payguard/apps/wallet
+      target: /run/agent-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/vault/runtime/wallet.hcl
+      target: /etc/vault/runtime.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /run/agent:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    depends_on:
+      postgres-wallet:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+    - database
+    - operations
+  loan-service:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - applications
+    build:
+      context: .
+      dockerfile: infrastructure/application.Dockerfile
+      args:
+        SERVICE: loan
+    restart: unless-stopped
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/runtime.hcl
+    - -log-level=error
+    stop_grace_period: 40s
+    ports:
+    - 127.0.0.1:8082:8080
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-loan:5432/payguard_loan?sslmode=verify-full&sslrootcert=/etc/vault/ca.crt&currentSchema=payguard
+      VAULT_ADDR: https://vault:8200
+      VAULT_CA_FILE: /etc/vault/ca.crt
+      VAULT_TOKEN_FILE: /run/agent/token
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+    - type: bind
+      source: ./.local/payguard/apps/loan
+      target: /run/agent-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/vault/runtime/loan.hcl
+      target: /etc/vault/runtime.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /run/agent:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    depends_on:
+      postgres-loan:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+    - database
+    - operations
+  collateral-service:
+    read_only: true
+    cap_drop: *id001
+    security_opt: *id002
+    profiles:
+    - applications
+    build:
+      context: .
+      dockerfile: infrastructure/application.Dockerfile
+      args:
+        SERVICE: collateral
+    restart: unless-stopped
+    user: ${PAYGUARD_LOCAL_UID:-1000}:${PAYGUARD_LOCAL_GID:-1000}
+    entrypoint:
+    - vault
+    - agent
+    - -config=/etc/vault/runtime.hcl
+    - -log-level=error
+    stop_grace_period: 40s
+    ports:
+    - 127.0.0.1:8083:8080
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-collateral:5432/payguard_collateral?sslmode=verify-full&sslrootcert=/etc/vault/ca.crt&currentSchema=payguard
+      VAULT_ADDR: https://vault:8200
+      VAULT_CA_FILE: /etc/vault/ca.crt
+      VAULT_TOKEN_FILE: /run/agent/token
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+    - type: bind
+      source: ./.local/payguard/apps/collateral
+      target: /run/agent-auth
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./.local/payguard/ca.crt
+      target: /etc/vault/ca.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ./infrastructure/vault/runtime/collateral.hcl
+      target: /etc/vault/runtime.hcl
+      read_only: true
+      bind:
+        create_host_path: false
+    tmpfs:
+    - /run/agent:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    - /tmp:rw,noexec,nosuid,nodev,uid=${PAYGUARD_LOCAL_UID:-1000},gid=${PAYGUARD_LOCAL_GID:-1000},mode=0700
+    depends_on:
+      postgres-collateral:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+    - database
+    - operations
 networks:
-  operations:
   database:
     internal: true
-
+  operations:
+    internal: true
 volumes:
-  postgres_wallet_data:
-  postgres_loan_data:
-  postgres_collateral_data:
   postgres_identity_data:
+    external: true
+    name: ${PAYGUARD_POSTGRES_IDENTITY_VOLUME:-payguard_postgres_identity_data}
+  postgres_wallet_data:
+    external: true
+    name: ${PAYGUARD_POSTGRES_WALLET_VOLUME:-payguard_postgres_wallet_data}
+  postgres_loan_data:
+    external: true
+    name: ${PAYGUARD_POSTGRES_LOAN_VOLUME:-payguard_postgres_loan_data}
+  postgres_collateral_data:
+    external: true
+    name: ${PAYGUARD_POSTGRES_COLLATERAL_VOLUME:-payguard_postgres_collateral_data}
   vault_data:
+    external: true
+    name: ${PAYGUARD_VAULT_DATA_VOLUME:-payguard_vault_data}
   vault_audit:
+    external: true
+    name: ${PAYGUARD_VAULT_AUDIT_VOLUME:-payguard_vault_audit}
   kafka_data:
+    external: true
+    name: ${PAYGUARD_KAFKA_DATA_VOLUME:-payguard_kafka_data}

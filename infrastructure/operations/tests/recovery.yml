@@ -1,0 +1,51 @@
+---
+- name: Test a real Vault outage and non-destructive recovery on an isolated fixture
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env','PAYGUARD_REPO_ROOT') }}"
+    compose: [docker, compose, -f, "{{ repo }}/docker-compose.yaml"]
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: ../tasks/target.yml
+    - name: Restrict disruption to an isolated test project
+      ansible.builtin.assert:
+        that: lookup('env','COMPOSE_PROJECT_NAME') is match('^payguard-it-[a-z0-9-]+$')
+    - name: Exercise dependency loss and always restore the Vault process
+      block:
+        - name: Stop Vault without removing its Raft volume
+          ansible.builtin.command:
+            argv: "{{ compose + ['stop', 'vault'] }}"
+        - name: Expect verified-TLS health to become unavailable
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/sys/health
+            ca_path: "{{ repo }}/.local/payguard/ca.crt"
+            validate_certs: true
+            timeout: 3
+          register: unavailable
+          ignore_errors: true
+          no_log: true
+        - name: Require an actual outage
+          ansible.builtin.assert:
+            that: unavailable is failed
+      always:
+        - name: Start the existing Vault container
+          ansible.builtin.command:
+            argv: "{{ compose + ['start','vault'] }}"
+        - name: Wait for the existing seal-state endpoint
+          ansible.builtin.uri:
+            url: https://vault:8200/v1/sys/seal-status
+            ca_path: "{{ repo }}/.local/payguard/ca.crt"
+            validate_certs: true
+            status_code: 200
+            timeout: 3
+          register: seal_status
+          until: seal_status is succeeded
+          retries: 10
+          delay: 2
+          no_log: true
+- ansible.builtin.import_playbook: ../vault-lifecycle.yml
+  vars:
+    operation: unseal
+    local_rehearsal: true
+- ansible.builtin.import_playbook: integration.yml

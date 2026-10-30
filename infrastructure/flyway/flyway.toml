@@ -1,0 +1,14 @@
+[flyway]
+locations = ["filesystem:/flyway/sql", "filesystem:/flyway/callbacks"]
+defaultSchema = "payguard"
+schemas = ["payguard"]
+createSchemas = false
+cleanDisabled = true
+baselineOnMigrate = false
+outOfOrder = false
+validateOnMigrate = true
+validateMigrationNaming = true
+connectRetries = 3
+lockRetryCount = 10
+executeInTransaction = true
+# Every connection selects the stable owner through afterConnect.sql.

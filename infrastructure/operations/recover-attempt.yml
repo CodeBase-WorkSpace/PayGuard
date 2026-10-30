@@ -1,0 +1,116 @@
+---
+- name: Reconcile one interrupted Agent attempt
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo: "{{ lookup('env', 'PAYGUARD_REPO_ROOT') }}"
+    runtime_root: "{{ lookup('env', 'PAYGUARD_RUNTIME_ROOT') }}"
+    operator_uid: "{{ lookup('env', 'PAYGUARD_LOCAL_UID') | int }}"
+    operator_gid: "{{ lookup('env', 'PAYGUARD_LOCAL_GID') | int }}"
+  tasks:
+    - name: Validate recorded target
+      ansible.builtin.import_tasks: tasks/target.yml
+
+    - name: Reject unsafe receipt selector
+      ansible.builtin.assert:
+        that:
+          - attempt_id | default('') is match('^payguard-(identity|wallet|loan|collateral)-[A-Za-z0-9_.-]+$')
+        fail_msg: Select a recorded Agent attempt ID
+
+    - name: Read protected receipt
+      ansible.builtin.slurp:
+        src: "{{ repo }}/.local/payguard/operator/receipts/{{ attempt_id }}.json"
+      register: receipt_source
+      no_log: true
+
+    - name: Parse and verify receipt scope
+      ansible.builtin.set_fact:
+        receipt: "{{ receipt_source.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Validate a previously completed recovery record
+      ansible.builtin.assert:
+        that:
+          - receipt.attempt == attempt_id
+          - receipt.target == lookup('env','COMPOSE_PROJECT_NAME')
+      when: receipt.state == 'cleanup_verified'
+
+    - name: Finish an already verified recovery without changing state
+      ansible.builtin.meta: end_play
+      when: receipt.state == 'cleanup_verified'
+
+    - name: Reject unrelated or tampered attempt
+      ansible.builtin.assert:
+        that:
+          - receipt.attempt == attempt_id
+          - receipt.service in ['identity', 'wallet', 'loan', 'collateral']
+          - receipt.target == lookup('env', 'COMPOSE_PROJECT_NAME')
+          - receipt.path == runtime_root ~ '/' ~ attempt_id
+          - receipt.state != 'cleanup_verified'
+          - lookup('env', 'COMPOSE_PROJECT_NAME') == (lookup('file', repo ~ '/.local/payguard/target.yml') | from_yaml).project
+          - receipt.container == 'payguard-agent-' ~ attempt_id
+        fail_msg: Receipt scope does not match this Compose project
+
+    - name: Stop only the recorded Agent container
+      ansible.builtin.command:
+        argv: [docker, rm, -f, "{{ receipt.container }}"]
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+    - name: Stop only the recorded Flyway container
+      ansible.builtin.command:
+        argv: [docker, rm, -f, "payguard-flyway-{{ attempt_id }}"]
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+    - name: Check for the private attempt token
+      ansible.builtin.stat:
+        path: "{{ receipt.path }}/{{ receipt.service }}/private/token"
+      register: private_token
+      no_log: true
+
+    - name: Revoke this attempt token and child database leases
+      ansible.builtin.uri:
+        url: https://vault:8200/v1/auth/token/revoke-self
+        method: POST
+        ca_path: "{{ repo }}/.local/payguard/ca.crt"
+        validate_certs: true
+        headers:
+          X-Vault-Token: "{{ lookup('file', receipt.path ~ '/' ~ receipt.service ~ '/private/token') | trim }}"
+        status_code: [200, 204]
+        timeout: 5
+      register: revoked
+      ignore_errors: true
+      when: private_token.stat.exists
+      no_log: true
+
+    - name: Fail closed when revocation cannot be proved
+      ansible.builtin.fail:
+        msg: "cleanup_unknown for {{ attempt_id }}; inspect protected receipt, token expiry and database sessions before reuse"
+      when: not private_token.stat.exists or revoked is failed
+
+    - name: Remove only the recorded tmpfs attempt
+      ansible.builtin.file:
+        path: "{{ receipt.path }}"
+        state: absent
+      no_log: true
+
+    - name: Release only this service lock after confirmed cleanup
+      ansible.builtin.file:
+        path: "{{ runtime_root }}/migration-{{ receipt.service }}.lock"
+        state: absent
+
+    - name: Retain sanitized completion evidence without protected identifiers
+      ansible.builtin.copy:
+        dest: "{{ repo }}/.local/payguard/operator/receipts/{{ attempt_id }}.json"
+        content: "{{ {'attempt': attempt_id, 'service': receipt.service, 'target': receipt.target, 'state': 'cleanup_verified'} | to_json }}\n"
+        owner: "{{ operator_uid }}"
+        group: "{{ operator_gid }}"
+        mode: '0600'
+      no_log: true
+
+    - name: Report sanitized recovery result
+      ansible.builtin.debug:
+        msg: "cleanup_verified service={{ receipt.service }} attempt={{ attempt_id }}"
