@@ -37,6 +37,7 @@ template {
 # lease_seconds={{ .LeaseDuration }}
 # lease_id={{ .LeaseID }}
 [environments.default]
+jdbcProperties = { options = "-c role=identity_owner" }
 url = "jdbc:postgresql://postgres-identity:5432/payguard_identity?sslmode=verify-full&sslrootcert=/run/agent-ca/ca.crt&currentSchema=payguard"
 user = {{ .Data.username | toJSON }}
 password = {{ .Data.password | toJSON }}

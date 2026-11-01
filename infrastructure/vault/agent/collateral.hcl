@@ -37,6 +37,7 @@ template {
 # lease_seconds={{ .LeaseDuration }}
 # lease_id={{ .LeaseID }}
 [environments.default]
+jdbcProperties = { options = "-c role=collateral_owner" }
 url = "jdbc:postgresql://postgres-collateral:5432/payguard_collateral?sslmode=verify-full&sslrootcert=/run/agent-ca/ca.crt&currentSchema=payguard"
 user = {{ .Data.username | toJSON }}
 password = {{ .Data.password | toJSON }}

@@ -118,6 +118,7 @@
           ansible.builtin.assert:
             that:
               - rendered_text is search('(?m)^\[environments.default\]$')
+              - rendered_text is search('(?m)^jdbcProperties = \{ options = "-c role=' ~ service ~ '_owner" \}$')
               - rendered_text is search('(?m)^url = "jdbc:postgresql://postgres-' ~ service ~ ':5432/payguard_' ~ service ~ '\?sslmode=verify-full&sslrootcert=/run/agent-ca/ca.crt&currentSchema=payguard"$')
               - rendered_text is search('(?m)^user = ".+"$')
               - rendered_text is search('(?m)^password = ".+"$')

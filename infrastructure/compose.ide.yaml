@@ -1,0 +1,20 @@
+# Optional local IDE access; PostgreSQL remains private without this override.
+services:
+  postgres-wallet:
+    networks: [database, ide]
+    ports:
+      - "127.0.0.1:${WALLET_POSTGRES_PORT:-15431}:5432"
+  postgres-loan:
+    networks: [database, ide]
+    ports:
+      - "127.0.0.1:${LOAN_POSTGRES_PORT:-15432}:5432"
+  postgres-collateral:
+    networks: [database, ide]
+    ports:
+      - "127.0.0.1:${COLLATERAL_POSTGRES_PORT:-15433}:5432"
+  postgres-identity:
+    networks: [database, ide]
+    ports:
+      - "127.0.0.1:${IDENTITY_POSTGRES_PORT:-15434}:5432"
+networks:
+  ide: {}
