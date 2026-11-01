@@ -79,7 +79,7 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ./payguard-identity-service/src/main/resources/db/migration/postgresql
+      source: ./payguard-identity/src/main/resources/db/migration/postgresql
       target: /flyway/sql
       read_only: true
       bind:
@@ -184,7 +184,7 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ./payguard-wallet-service/src/main/resources/db/migration/postgresql
+      source: ./payguard-wallet/src/main/resources/db/migration/postgresql
       target: /flyway/sql
       read_only: true
       bind:
@@ -289,7 +289,7 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ./payguard-loan-service/src/main/resources/db/migration/postgresql
+      source: ./payguard-loan/src/main/resources/db/migration/postgresql
       target: /flyway/sql
       read_only: true
       bind:
@@ -394,7 +394,7 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ./payguard-collateral-service/src/main/resources/db/migration/postgresql
+      source: ./payguard-collateral/src/main/resources/db/migration/postgresql
       target: /flyway/sql
       read_only: true
       bind:
@@ -446,6 +446,13 @@ services:
       PAYGUARD_LOCAL_GID: ${PAYGUARD_LOCAL_GID:-1000}
       PAYGUARD_DOCKER_GID: ${PAYGUARD_DOCKER_GID:-0}
       COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-payguard}
+      PAYGUARD_POSTGRES_IDENTITY_VOLUME: ${PAYGUARD_POSTGRES_IDENTITY_VOLUME:-payguard_postgres_identity_data}
+      PAYGUARD_POSTGRES_WALLET_VOLUME: ${PAYGUARD_POSTGRES_WALLET_VOLUME:-payguard_postgres_wallet_data}
+      PAYGUARD_POSTGRES_LOAN_VOLUME: ${PAYGUARD_POSTGRES_LOAN_VOLUME:-payguard_postgres_loan_data}
+      PAYGUARD_POSTGRES_COLLATERAL_VOLUME: ${PAYGUARD_POSTGRES_COLLATERAL_VOLUME:-payguard_postgres_collateral_data}
+      PAYGUARD_VAULT_DATA_VOLUME: ${PAYGUARD_VAULT_DATA_VOLUME:-payguard_vault_data}
+      PAYGUARD_VAULT_AUDIT_VOLUME: ${PAYGUARD_VAULT_AUDIT_VOLUME:-payguard_vault_audit}
+      PAYGUARD_KAFKA_DATA_VOLUME: ${PAYGUARD_KAFKA_DATA_VOLUME:-payguard_kafka_data}
       ANSIBLE_CONFIG: ${PAYGUARD_REPO_ROOT:-/workspace/payguard}/infrastructure/operations/ansible.cfg
       ANSIBLE_LOCAL_TEMP: /tmp/ansible
       ANSIBLE_REMOTE_TEMP: /tmp/ansible

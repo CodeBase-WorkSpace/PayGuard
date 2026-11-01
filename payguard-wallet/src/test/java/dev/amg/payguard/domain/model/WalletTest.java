@@ -8,9 +8,6 @@ import dev.amg.payguard.domain.event.*;
 import dev.amg.payguard.domain.exception.*;
 import dev.amg.payguard.domain.value_object.*;
 import domain.InvalidDomainArgumentException;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** Tests wallet invariants, status permissions, posting order and rejection atomicity. */
@@ -86,13 +83,15 @@ class WalletTest {
   /** Prevents restoring an overdraft under the explicit non-overdraft policy. */
   @Test
   void shouldRejectNegativeBookBalance() {
-    assertThrows(NegativeAmountNotAllowedException.class, () -> wallet(WalletStatus.ACTIVE, "-1", "0"));
+    assertThrows(
+        NegativeAmountNotAllowedException.class, () -> wallet(WalletStatus.ACTIVE, "-1", "0"));
   }
 
   /** Rejects corrupt negative reservation snapshots. */
   @Test
   void shouldRejectNegativeReservedBalance() {
-    assertThrows(NegativeAmountNotAllowedException.class, () -> wallet(WalletStatus.ACTIVE, "100", "-1"));
+    assertThrows(
+        NegativeAmountNotAllowedException.class, () -> wallet(WalletStatus.ACTIVE, "100", "-1"));
   }
 
   /** Rejects a restored snapshot with negative availability. */
@@ -152,7 +151,8 @@ class WalletTest {
   void shouldRejectExcessReleaseWithoutMutation() {
     Wallet wallet = wallet(WalletStatus.ACTIVE, "100", "30");
     var before = snapshot(wallet);
-    assertThrows(InvalidWalletStateException.class, () -> wallet.unreserveFunds(money("30.01"), NOW));
+    assertThrows(
+        InvalidWalletStateException.class, () -> wallet.unreserveFunds(money("30.01"), NOW));
     assertEquals(before, snapshot(wallet));
   }
 
@@ -169,8 +169,15 @@ class WalletTest {
   @Test
   void shouldRejectWalletUuidAsAccountShortcut() {
     Wallet wallet = wallet();
-    LedgerEntry entry = entry(100, TRANSACTION_ID, new AccountId(WALLET_ID.value()),
-        money("10"), LedgerEntryType.CREDIT, 10, NOW);
+    LedgerEntry entry =
+        entry(
+            100,
+            TRANSACTION_ID,
+            new AccountId(WALLET_ID.value()),
+            money("10"),
+            LedgerEntryType.CREDIT,
+            10,
+            NOW);
     var before = snapshot(wallet);
     assertThrows(InvalidWalletStateException.class, () -> wallet.applyLedgerEntry(entry, NOW));
     assertEquals(before, snapshot(wallet));
@@ -181,7 +188,8 @@ class WalletTest {
   void shouldDebitOnlyAvailableFunds() {
     Wallet wallet = wallet(WalletStatus.ACTIVE, "100", "30");
     var before = snapshot(wallet);
-    assertThrows(InsufficientFundException.class,
+    assertThrows(
+        InsufficientFundException.class,
         () -> wallet.applyLedgerEntry(walletEntry(LedgerEntryType.DEBIT, "70.01", 10), NOW));
     assertEquals(before, snapshot(wallet));
     wallet.applyLedgerEntry(walletEntry(LedgerEntryType.DEBIT, "70", 10), NOW);
@@ -204,7 +212,8 @@ class WalletTest {
   @Test
   void shouldRejectOutOfOrderSequence() {
     Wallet wallet = wallet();
-    assertThrows(InvalidWalletStateException.class,
+    assertThrows(
+        InvalidWalletStateException.class,
         () -> wallet.applyLedgerEntry(walletEntry(LedgerEntryType.CREDIT, "10", 8), NOW));
   }
 
@@ -233,7 +242,8 @@ class WalletTest {
   void shouldRejectCaptureUsingCredit() {
     Wallet wallet = wallet(WalletStatus.ACTIVE, "100", "30");
     var before = snapshot(wallet);
-    assertThrows(InvalidWalletStateException.class,
+    assertThrows(
+        InvalidWalletStateException.class,
         () -> wallet.captureReservedFunds(walletEntry(LedgerEntryType.CREDIT, "30", 10), NOW));
     assertEquals(before, snapshot(wallet));
   }
@@ -243,7 +253,8 @@ class WalletTest {
   void shouldRejectCaptureAboveReservation() {
     Wallet wallet = wallet(WalletStatus.ACTIVE, "100", "30");
     var before = snapshot(wallet);
-    assertThrows(InvalidWalletStateException.class,
+    assertThrows(
+        InvalidWalletStateException.class,
         () -> wallet.captureReservedFunds(walletEntry(LedgerEntryType.DEBIT, "30.01", 10), NOW));
     assertEquals(before, snapshot(wallet));
   }
@@ -252,7 +263,8 @@ class WalletTest {
   @Test
   void shouldRejectFrozenCapture() {
     Wallet wallet = wallet(WalletStatus.FROZEN, "100", "30");
-    assertThrows(WalletFrozenException.class,
+    assertThrows(
+        WalletFrozenException.class,
         () -> wallet.captureReservedFunds(walletEntry(LedgerEntryType.DEBIT, "30", 10), NOW));
   }
 
@@ -262,7 +274,9 @@ class WalletTest {
     Wallet wallet = wallet();
     var before = snapshot(wallet);
     assertThrows(InvalidDomainArgumentException.class, () -> wallet.reserveFunds(money("1"), null));
-    assertThrows(InvalidDomainArgumentException.class, () -> wallet.applyLedgerEntry(walletEntry(LedgerEntryType.CREDIT, "1", 10), null));
+    assertThrows(
+        InvalidDomainArgumentException.class,
+        () -> wallet.applyLedgerEntry(walletEntry(LedgerEntryType.CREDIT, "1", 10), null));
     assertEquals(before, snapshot(wallet));
   }
 
@@ -272,7 +286,8 @@ class WalletTest {
     Wallet wallet = wallet();
     wallet.reserveFunds(money("1"), NOW);
     var before = snapshot(wallet);
-    assertThrows(InvalidWalletStateException.class, () -> wallet.unreserveFunds(money("1"), CREATED));
+    assertThrows(
+        InvalidWalletStateException.class, () -> wallet.unreserveFunds(money("1"), CREATED));
     assertEquals(before, snapshot(wallet));
   }
 
@@ -396,43 +411,116 @@ class WalletTest {
   /** Rejects invalid restored metadata before exposing an aggregate. */
   @Test
   void shouldRejectBookCurrencyOnRestore() {
-    assertThrows(CurrencyMismatchException.class, () -> Wallet.restore(WALLET_ID, ACCOUNT_ID, USER_ID, CHF,
-        WalletStatus.ACTIVE, Money.of("100", USD), money("0"), 0, -1, CREATED, CREATED));
+    assertThrows(
+        CurrencyMismatchException.class,
+        () ->
+            Wallet.restore(
+                WALLET_ID,
+                ACCOUNT_ID,
+                USER_ID,
+                CHF,
+                WalletStatus.ACTIVE,
+                Money.of("100", USD),
+                money("0"),
+                0,
+                -1,
+                CREATED,
+                CREATED));
   }
 
   /** Rejects invalid restored metadata before exposing an aggregate. */
   @Test
   void shouldRejectReservedCurrencyOnRestore() {
-    assertThrows(CurrencyMismatchException.class, () -> Wallet.restore(WALLET_ID, ACCOUNT_ID, USER_ID, CHF,
-        WalletStatus.ACTIVE, money("100"), Money.of("0", USD), 0, -1, CREATED, CREATED));
+    assertThrows(
+        CurrencyMismatchException.class,
+        () ->
+            Wallet.restore(
+                WALLET_ID,
+                ACCOUNT_ID,
+                USER_ID,
+                CHF,
+                WalletStatus.ACTIVE,
+                money("100"),
+                Money.of("0", USD),
+                0,
+                -1,
+                CREATED,
+                CREATED));
   }
 
   /** Rejects invalid restored metadata before exposing an aggregate. */
   @Test
   void shouldRejectNegativeVersionOnRestore() {
-    assertThrows(InvalidWalletStateException.class, () -> Wallet.restore(WALLET_ID, ACCOUNT_ID, USER_ID, CHF,
-        WalletStatus.ACTIVE, money("100"), money("0"), -1, -1, CREATED, CREATED));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Wallet.restore(
+                WALLET_ID,
+                ACCOUNT_ID,
+                USER_ID,
+                CHF,
+                WalletStatus.ACTIVE,
+                money("100"),
+                money("0"),
+                -1,
+                -1,
+                CREATED,
+                CREATED));
   }
 
   /** Rejects invalid restored metadata before exposing an aggregate. */
   @Test
   void shouldRejectInvalidSequenceOnRestore() {
-    assertThrows(InvalidWalletStateException.class, () -> Wallet.restore(WALLET_ID, ACCOUNT_ID, USER_ID, CHF,
-        WalletStatus.ACTIVE, money("100"), money("0"), 0, -2, CREATED, CREATED));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Wallet.restore(
+                WALLET_ID,
+                ACCOUNT_ID,
+                USER_ID,
+                CHF,
+                WalletStatus.ACTIVE,
+                money("100"),
+                money("0"),
+                0,
+                -2,
+                CREATED,
+                CREATED));
   }
 
   /** Rejects invalid restored metadata before exposing an aggregate. */
   @Test
   void shouldRejectBackdatedSnapshotOnRestore() {
-    assertThrows(InvalidWalletStateException.class, () -> Wallet.restore(WALLET_ID, ACCOUNT_ID, USER_ID, CHF,
-        WalletStatus.ACTIVE, money("100"), money("0"), 0, -1, NOW, CREATED));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Wallet.restore(
+                WALLET_ID,
+                ACCOUNT_ID,
+                USER_ID,
+                CHF,
+                WalletStatus.ACTIVE,
+                money("100"),
+                money("0"),
+                0,
+                -1,
+                NOW,
+                CREATED));
   }
 
   /** Rejects posting timestamps outside the wallet/application interval. */
   @Test
   void shouldRejectFuturePostingTime() {
     Wallet wallet = wallet();
-    LedgerEntry entry = entry(100, TRANSACTION_ID, ACCOUNT_ID, money("1"), LedgerEntryType.CREDIT, 10, NOW.plusNanos(1));
+    LedgerEntry entry =
+        entry(
+            100,
+            TRANSACTION_ID,
+            ACCOUNT_ID,
+            money("1"),
+            LedgerEntryType.CREDIT,
+            10,
+            NOW.plusNanos(1));
     assertThrows(InvalidWalletStateException.class, () -> wallet.applyLedgerEntry(entry, NOW));
   }
 
@@ -440,7 +528,15 @@ class WalletTest {
   @Test
   void shouldRejectBeforeCreationPostingTime() {
     Wallet wallet = wallet();
-    LedgerEntry entry = entry(100, TRANSACTION_ID, ACCOUNT_ID, money("1"), LedgerEntryType.CREDIT, 10, CREATED.minusNanos(1));
+    LedgerEntry entry =
+        entry(
+            100,
+            TRANSACTION_ID,
+            ACCOUNT_ID,
+            money("1"),
+            LedgerEntryType.CREDIT,
+            10,
+            CREATED.minusNanos(1));
     assertThrows(InvalidWalletStateException.class, () -> wallet.applyLedgerEntry(entry, NOW));
   }
 }

@@ -47,7 +47,7 @@
         query: |
           SELECT count(*)::int AS missing FROM pg_tables
           WHERE schemaname='payguard' AND tablename<>'flyway_schema_history'
-          AND tablename NOT LIKE '%_audit_log' AND tablename <> 'identity_challenge_scope'
+          AND tablename NOT LIKE '%_audit_log' AND tablename <> 'identity_otp_scope'
           AND NOT (has_table_privilege('{{ item }}_runtime',format('payguard.%I',tablename),'SELECT')
                AND has_table_privilege('{{ item }}_runtime',format('payguard.%I',tablename),'INSERT')
                AND has_table_privilege('{{ item }}_runtime',format('payguard.%I',tablename),'UPDATE')

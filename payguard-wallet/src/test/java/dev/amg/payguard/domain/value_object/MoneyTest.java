@@ -1,13 +1,13 @@
 package dev.amg.payguard.domain.value_object;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import dev.amg.payguard.domain.exception.CurrencyMismatchException;
 import dev.amg.payguard.domain.exception.NegativeAmountNotAllowedException;
 import domain.InvalidDomainArgumentException;
 import java.math.BigDecimal;
 import java.util.Currency;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /** Tests exact financial arithmetic, normalization and currency isolation. */
 class MoneyTest {
@@ -50,8 +50,8 @@ class MoneyTest {
   /** Zero-currency placeholder XXX has no defined minor-unit precision. */
   @Test
   void shouldRejectUndefinedCurrencyPrecision() {
-    assertThrows(IllegalArgumentException.class,
-        () -> Money.of("100", Currency.getInstance("XXX")));
+    assertThrows(
+        IllegalArgumentException.class, () -> Money.of("100", Currency.getInstance("XXX")));
   }
 
   /** Zero is normalized to the chosen currency scale. */
@@ -95,21 +95,22 @@ class MoneyTest {
   /** Subtraction may produce a negative Money value. */
   @Test
   void shouldSubtractExactlyIntoNegativeBalance() {
-    assertEquals(Money.of("-50.00", CHF),
-        Money.of("100.00", CHF).subtract(Money.of("150.00", CHF)));
+    assertEquals(
+        Money.of("-50.00", CHF), Money.of("100.00", CHF).subtract(Money.of("150.00", CHF)));
   }
 
   /** Mixed-currency addition is always rejected. */
   @Test
   void shouldRejectCrossCurrencyAddition() {
-    assertThrows(CurrencyMismatchException.class,
-        () -> Money.of("1.00", CHF).add(Money.of("1.00", USD)));
+    assertThrows(
+        CurrencyMismatchException.class, () -> Money.of("1.00", CHF).add(Money.of("1.00", USD)));
   }
 
   /** Mixed-currency subtraction is always rejected. */
   @Test
   void shouldRejectCrossCurrencySubtraction() {
-    assertThrows(CurrencyMismatchException.class,
+    assertThrows(
+        CurrencyMismatchException.class,
         () -> Money.of("1.00", CHF).subtract(Money.of("1.00", USD)));
   }
 
@@ -122,15 +123,14 @@ class MoneyTest {
   /** Decimal multiplication succeeds when the result has valid precision. */
   @Test
   void shouldMultiplyByExactDecimalFactor() {
-    assertEquals(Money.of("5.00", CHF),
-        Money.of("10.00", CHF).multiply(new BigDecimal("0.5")));
+    assertEquals(Money.of("5.00", CHF), Money.of("10.00", CHF).multiply(new BigDecimal("0.5")));
   }
 
   /** Decimal multiplication fails rather than silently rounding half cents. */
   @Test
   void shouldRejectInexactDecimalMultiplication() {
-    assertThrows(ArithmeticException.class,
-        () -> Money.of("10.01", CHF).multiply(new BigDecimal("0.5")));
+    assertThrows(
+        ArithmeticException.class, () -> Money.of("10.01", CHF).multiply(new BigDecimal("0.5")));
   }
 
   /** Zero multiplication preserves currency and normalized scale. */
@@ -156,8 +156,8 @@ class MoneyTest {
   /** A negative amount is rejected where nonnegative is explicitly required. */
   @Test
   void shouldRejectNegativeAmountForNonNegativeInvariant() {
-    assertThrows(NegativeAmountNotAllowedException.class,
-        () -> Money.of("-0.01", CHF).assertNonNegative());
+    assertThrows(
+        NegativeAmountNotAllowedException.class, () -> Money.of("-0.01", CHF).assertNonNegative());
   }
 
   /** Zero and positive amounts satisfy the nonnegative invariant. */
@@ -208,7 +208,8 @@ class MoneyTest {
   /** Ordering across currencies is not meaningful. */
   @Test
   void shouldRejectCrossCurrencyComparison() {
-    assertThrows(CurrencyMismatchException.class,
+    assertThrows(
+        CurrencyMismatchException.class,
         () -> Money.of("1.00", CHF).compareTo(Money.of("1.00", USD)));
   }
 
@@ -224,8 +225,7 @@ class MoneyTest {
   /** Null amounts are rejected by the shared-domain validator. */
   @Test
   void shouldRejectNullAmount() {
-    assertThrows(InvalidDomainArgumentException.class,
-        () -> Money.of((BigDecimal) null, CHF));
+    assertThrows(InvalidDomainArgumentException.class, () -> Money.of((BigDecimal) null, CHF));
   }
 
   /** Null currencies are rejected by the shared-domain validator. */
@@ -237,8 +237,7 @@ class MoneyTest {
   /** Null text amounts are rejected before parsing. */
   @Test
   void shouldRejectNullTextAmount() {
-    assertThrows(InvalidDomainArgumentException.class,
-        () -> Money.of((String) null, CHF));
+    assertThrows(InvalidDomainArgumentException.class, () -> Money.of((String) null, CHF));
   }
 
   /** Invalid decimal text is rejected rather than coerced. */
@@ -250,22 +249,21 @@ class MoneyTest {
   /** Null multiplication factors are rejected by the domain validator. */
   @Test
   void shouldRejectNullDecimalFactor() {
-    assertThrows(InvalidDomainArgumentException.class,
+    assertThrows(
+        InvalidDomainArgumentException.class,
         () -> Money.of("1.00", CHF).multiply((BigDecimal) null));
   }
 
   /** Large positive long amounts are represented without double precision loss. */
   @Test
   void shouldAcceptMaximumLongAmount() {
-    assertEquals(new BigDecimal("9223372036854775807.00"),
-        Money.of(Long.MAX_VALUE, CHF).amount());
+    assertEquals(new BigDecimal("9223372036854775807.00"), Money.of(Long.MAX_VALUE, CHF).amount());
   }
 
   /** Large negative long amounts are represented without double precision loss. */
   @Test
   void shouldAcceptMinimumLongAmount() {
-    assertEquals(new BigDecimal("-9223372036854775808.00"),
-        Money.of(Long.MIN_VALUE, CHF).amount());
+    assertEquals(new BigDecimal("-9223372036854775808.00"), Money.of(Long.MIN_VALUE, CHF).amount());
   }
 
   /** The long factory interprets whole major units, not cents. */

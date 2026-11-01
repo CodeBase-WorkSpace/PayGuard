@@ -3,7 +3,8 @@ set -eu
 # Refuse a different existing layout instead of initializing an empty replacement cluster.
 # PGDATA may be overridden only after inspecting the existing volume read-only.
 : "${PGDATA:=/var/lib/postgresql/18/docker}"
-for version in $(find /var/lib/postgresql -name PG_VERSION -type f); do
+# Each database also has base/<oid>/PG_VERSION; only cluster markers determine layout.
+for version in $(find /var/lib/postgresql -name PG_VERSION -type f ! -path '*/base/*'); do
   if [ "$version" != "$PGDATA/PG_VERSION" ] || [ "$(cat "$version")" != 18 ]; then
     echo 'Existing PostgreSQL layout/version differs from PGDATA; refusing initialization' >&2
     exit 1

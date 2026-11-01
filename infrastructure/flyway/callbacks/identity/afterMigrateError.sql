@@ -29,8 +29,8 @@ END
 $audit$;
 DO $scope$
 BEGIN
-  IF to_regclass('payguard.identity_challenge_scope') IS NOT NULL THEN
-    REVOKE DELETE ON payguard.identity_challenge_scope FROM identity_runtime;
+  IF to_regclass('payguard.identity_otp_scope') IS NOT NULL THEN
+    REVOKE DELETE ON payguard.identity_otp_scope FROM identity_runtime;
   END IF;
 END
 $scope$;

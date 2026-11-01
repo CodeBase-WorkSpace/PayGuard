@@ -3,17 +3,18 @@ package dev.amg.payguard.domain.value_object;
 import dev.amg.payguard.domain.exception.CurrencyMismatchException;
 import dev.amg.payguard.domain.exception.NegativeAmountNotAllowedException;
 import domain.DomainValidation;
+import domain.ValueObject;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Currency;
-import domain.ValueObject;
+import org.jspecify.annotations.NonNull;
 
 /**
  * Exact, immutable monetary amount with its currency.
  *
- * <p>Values are normalized to the currency's default ISO 4217 minor-unit scale;
- * no implicit rounding is allowed. Negative values are valid; operation-specific
- * sign constraints belong to the Wallet domain rules.
+ * <p>Values are normalized to the currency's default ISO 4217 minor-unit scale; no implicit
+ * rounding is allowed. Negative values are valid; operation-specific sign constraints belong to the
+ * Wallet domain rules.
  *
  * <p>Comparison is supported only for equal currencies.
  *
@@ -92,8 +93,7 @@ public record Money(BigDecimal amount, Currency currency)
   /** Asserts that the monetary value is zero or positive. */
   public void assertNonNegative() {
     if (isNegative()) {
-      throw new NegativeAmountNotAllowedException(
-          "Amount cannot be negative: " + amount);
+      throw new NegativeAmountNotAllowedException("Amount cannot be negative: " + amount);
     }
   }
 
@@ -138,7 +138,9 @@ public record Money(BigDecimal amount, Currency currency)
    * @throws CurrencyMismatchException for different currencies
    */
   @Override
-  public int compareTo(Money other) {
+  // Records generate equals and hashCode for the normalized amount and currency.
+  @SuppressWarnings("PMD.OverrideBothEqualsAndHashCodeOnComparable")
+  public int compareTo(@NonNull Money other) {
     assertSameCurrency(other);
     return amount.compareTo(other.amount);
   }
