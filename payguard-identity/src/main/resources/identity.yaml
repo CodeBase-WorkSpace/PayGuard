@@ -1,0 +1,9 @@
+swagger: "2.0"
+info:
+  title: PayGuard Identity
+  description: PayGuard Identity
+  version: 1.0.0
+host: www
+schemes:
+  - https
+paths:

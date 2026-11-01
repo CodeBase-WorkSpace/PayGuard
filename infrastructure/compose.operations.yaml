@@ -79,7 +79,7 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ./payguard-identity-service/src/main/resources/db/migration/postgresql
+      source: ./payguard-identity/src/main/resources/db/migration/postgresql
       target: /flyway/sql
       read_only: true
       bind:
@@ -184,7 +184,7 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ./payguard-wallet-service/src/main/resources/db/migration/postgresql
+      source: ./payguard-wallet/src/main/resources/db/migration/postgresql
       target: /flyway/sql
       read_only: true
       bind:
@@ -289,7 +289,7 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ./payguard-loan-service/src/main/resources/db/migration/postgresql
+      source: ./payguard-loan/src/main/resources/db/migration/postgresql
       target: /flyway/sql
       read_only: true
       bind:
@@ -394,7 +394,7 @@ services:
       bind:
         create_host_path: false
     - type: bind
-      source: ./payguard-collateral-service/src/main/resources/db/migration/postgresql
+      source: ./payguard-collateral/src/main/resources/db/migration/postgresql
       target: /flyway/sql
       read_only: true
       bind:

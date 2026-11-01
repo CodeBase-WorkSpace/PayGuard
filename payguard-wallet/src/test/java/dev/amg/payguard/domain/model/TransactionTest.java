@@ -8,7 +8,6 @@ import dev.amg.payguard.domain.event.*;
 import dev.amg.payguard.domain.exception.*;
 import dev.amg.payguard.domain.value_object.*;
 import domain.InvalidDomainArgumentException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -88,24 +87,44 @@ class TransactionTest {
   /** Even a zero fee must carry the principal currency. */
   @Test
   void shouldRejectMixedFeeCurrency() {
-    assertThrows(CurrencyMismatchException.class, () -> Transaction.initiate(TRANSACTION_ID,
-        IdempotencyKey.of("key"), TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID,
-        money("1"), Money.zero(USD), CREATED));
+    assertThrows(
+        CurrencyMismatchException.class,
+        () ->
+            Transaction.initiate(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("1"),
+                Money.zero(USD),
+                CREATED));
   }
 
   /** Source and destination are distinct under the selected transfer contract. */
   @Test
   void shouldRejectSelfTransfer() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.initiate(TRANSACTION_ID,
-        IdempotencyKey.of("key"), TransactionType.P2P_TRANSFER, ACCOUNT_ID, ACCOUNT_ID,
-        money("1"), money("0"), CREATED));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.initiate(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                ACCOUNT_ID,
+                money("1"),
+                money("0"),
+                CREATED));
   }
 
   /** Regression: a null time cannot leave status marked successful. */
   @Test
   void shouldRejectNullSettlementTimeWithoutMutation() {
     Transaction transaction = transaction("100", "0");
-    assertThrows(InvalidDomainArgumentException.class, () -> transaction.markSettled(postings(transaction), null));
+    assertThrows(
+        InvalidDomainArgumentException.class,
+        () -> transaction.markSettled(postings(transaction), null));
     assertEquals(TransactionStatus.INITIATED, transaction.getStatus());
     assertTrue(transaction.getSettledAt().isEmpty());
   }
@@ -126,7 +145,9 @@ class TransactionTest {
     Transaction transaction = transaction("100", "0");
     transaction.markFailed("Rejected by risk policy");
     assertEquals("Rejected by risk policy", transaction.getFailureReason().orElseThrow());
-    assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(postings(transaction), NOW));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () -> transaction.markSettled(postings(transaction), NOW));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markFailed("replace"));
     assertThrows(InvalidWalletStateException.class, transaction::markPendingSettlement);
   }
@@ -135,8 +156,11 @@ class TransactionTest {
   @Test
   void shouldPreventSecondSettlement() {
     Transaction transaction = settledTransaction();
-    assertThrows(TransactionAlreadySettledException.class, () -> transaction.markSettled(postings(transaction), NOW));
-    assertThrows(TransactionAlreadySettledException.class, () -> transaction.markFailed("late failure"));
+    assertThrows(
+        TransactionAlreadySettledException.class,
+        () -> transaction.markSettled(postings(transaction), NOW));
+    assertThrows(
+        TransactionAlreadySettledException.class, () -> transaction.markFailed("late failure"));
   }
 
   /** Rejects a missing posting batch before settlement. */
@@ -160,16 +184,28 @@ class TransactionTest {
   @Test
   void shouldRejectEmptyOrSingleEntryBatch() {
     Transaction transaction = transaction("100", "0");
-    assertThrows(DoubleEntryImbalanceException.class, () -> transaction.markSettled(List.of(), NOW));
-    assertThrows(DoubleEntryImbalanceException.class, () -> transaction.markSettled(List.of(postings(transaction).getFirst()), NOW));
+    assertThrows(
+        DoubleEntryImbalanceException.class, () -> transaction.markSettled(List.of(), NOW));
+    assertThrows(
+        DoubleEntryImbalanceException.class,
+        () -> transaction.markSettled(List.of(postings(transaction).getFirst()), NOW));
   }
 
   /** Unbalanced totals must not mark the transaction successful. */
   @Test
   void shouldRejectUnbalancedBatchWithoutMutation() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(postings(transaction).getFirst(),
-        entry(101, TRANSACTION_ID, DESTINATION_ID, money("99.99"), LedgerEntryType.CREDIT, 10, NOW));
+    List<LedgerEntry> entries =
+        List.of(
+            postings(transaction).getFirst(),
+            entry(
+                101,
+                TRANSACTION_ID,
+                DESTINATION_ID,
+                money("99.99"),
+                LedgerEntryType.CREDIT,
+                10,
+                NOW));
     assertThrows(DoubleEntryImbalanceException.class, () -> transaction.markSettled(entries, NOW));
     assertEquals(TransactionStatus.INITIATED, transaction.getStatus());
     assertTrue(transaction.getSettledAt().isEmpty());
@@ -179,9 +215,11 @@ class TransactionTest {
   @Test
   void shouldRejectBalancedButIncorrectPrincipal() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(
-        entry(100, TRANSACTION_ID, ACCOUNT_ID, money("99"), LedgerEntryType.DEBIT, 10, NOW),
-        entry(101, TRANSACTION_ID, DESTINATION_ID, money("99"), LedgerEntryType.CREDIT, 10, NOW));
+    List<LedgerEntry> entries =
+        List.of(
+            entry(100, TRANSACTION_ID, ACCOUNT_ID, money("99"), LedgerEntryType.DEBIT, 10, NOW),
+            entry(
+                101, TRANSACTION_ID, DESTINATION_ID, money("99"), LedgerEntryType.CREDIT, 10, NOW));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(entries, NOW));
   }
 
@@ -189,8 +227,17 @@ class TransactionTest {
   @Test
   void shouldRejectWrongFeeAllocation() {
     Transaction transaction = transaction("100", "2");
-    List<LedgerEntry> entries = List.of(postings(transaction).getFirst(),
-        entry(101, TRANSACTION_ID, DESTINATION_ID, money("102"), LedgerEntryType.CREDIT, 10, NOW));
+    List<LedgerEntry> entries =
+        List.of(
+            postings(transaction).getFirst(),
+            entry(
+                101,
+                TRANSACTION_ID,
+                DESTINATION_ID,
+                money("102"),
+                LedgerEntryType.CREDIT,
+                10,
+                NOW));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(entries, NOW));
   }
 
@@ -199,8 +246,17 @@ class TransactionTest {
   void shouldAcceptSplitFeeCredits() {
     Transaction transaction = transaction("100", "2");
     List<LedgerEntry> entries = new ArrayList<>(postings(transaction).subList(0, 2));
-    entries.add(entry(102, TRANSACTION_ID, FEE_ACCOUNT_ID, money("1"), LedgerEntryType.CREDIT, 10, NOW));
-    entries.add(entry(103, TRANSACTION_ID, new AccountId(uuid(40)), money("1"), LedgerEntryType.CREDIT, 10, NOW));
+    entries.add(
+        entry(102, TRANSACTION_ID, FEE_ACCOUNT_ID, money("1"), LedgerEntryType.CREDIT, 10, NOW));
+    entries.add(
+        entry(
+            103,
+            TRANSACTION_ID,
+            new AccountId(uuid(40)),
+            money("1"),
+            LedgerEntryType.CREDIT,
+            10,
+            NOW));
     transaction.markSettled(entries, NOW);
     assertEquals(TransactionStatus.SUCCESSFUL, transaction.getStatus());
   }
@@ -210,19 +266,29 @@ class TransactionTest {
   void shouldRejectDuplicateEntryIdentity() {
     Transaction transaction = transaction("100", "0");
     LedgerEntry debit = postings(transaction).getFirst();
-    LedgerEntry credit = new LedgerEntry(debit.id(), TRANSACTION_ID, DESTINATION_ID,
-        money("100"), LedgerEntryType.CREDIT, 10, NOW);
-    assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(List.of(debit, credit), NOW));
+    LedgerEntry credit =
+        new LedgerEntry(
+            debit.id(),
+            TRANSACTION_ID,
+            DESTINATION_ID,
+            money("100"),
+            LedgerEntryType.CREDIT,
+            10,
+            NOW);
+    assertThrows(
+        InvalidWalletStateException.class,
+        () -> transaction.markSettled(List.of(debit, credit), NOW));
   }
 
   /** Two distinct entries cannot claim the same sequence in one account. */
   @Test
   void shouldRejectDuplicateAccountSequence() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(
-        entry(100, TRANSACTION_ID, ACCOUNT_ID, money("40"), LedgerEntryType.DEBIT, 10, NOW),
-        entry(102, TRANSACTION_ID, ACCOUNT_ID, money("60"), LedgerEntryType.DEBIT, 10, NOW),
-        postings(transaction).get(1));
+    List<LedgerEntry> entries =
+        List.of(
+            entry(100, TRANSACTION_ID, ACCOUNT_ID, money("40"), LedgerEntryType.DEBIT, 10, NOW),
+            entry(102, TRANSACTION_ID, ACCOUNT_ID, money("60"), LedgerEntryType.DEBIT, 10, NOW),
+            postings(transaction).get(1));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(entries, NOW));
   }
 
@@ -230,8 +296,17 @@ class TransactionTest {
   @Test
   void shouldRejectForeignTransactionEntry() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(postings(transaction).getFirst(),
-        entry(101, new TransactionId(uuid(99)), DESTINATION_ID, money("100"), LedgerEntryType.CREDIT, 10, NOW));
+    List<LedgerEntry> entries =
+        List.of(
+            postings(transaction).getFirst(),
+            entry(
+                101,
+                new TransactionId(uuid(99)),
+                DESTINATION_ID,
+                money("100"),
+                LedgerEntryType.CREDIT,
+                10,
+                NOW));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(entries, NOW));
   }
 
@@ -239,8 +314,17 @@ class TransactionTest {
   @Test
   void shouldRejectPostingCurrencyMismatch() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(postings(transaction).getFirst(),
-        entry(101, TRANSACTION_ID, DESTINATION_ID, Money.of("100", USD), LedgerEntryType.CREDIT, 10, NOW));
+    List<LedgerEntry> entries =
+        List.of(
+            postings(transaction).getFirst(),
+            entry(
+                101,
+                TRANSACTION_ID,
+                DESTINATION_ID,
+                Money.of("100", USD),
+                LedgerEntryType.CREDIT,
+                10,
+                NOW));
     assertThrows(CurrencyMismatchException.class, () -> transaction.markSettled(entries, NOW));
   }
 
@@ -248,9 +332,11 @@ class TransactionTest {
   @Test
   void shouldRejectDebitFromDifferentAccount() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(
-        entry(100, TRANSACTION_ID, FEE_ACCOUNT_ID, money("100"), LedgerEntryType.DEBIT, 10, NOW),
-        postings(transaction).get(1));
+    List<LedgerEntry> entries =
+        List.of(
+            entry(
+                100, TRANSACTION_ID, FEE_ACCOUNT_ID, money("100"), LedgerEntryType.DEBIT, 10, NOW),
+            postings(transaction).get(1));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(entries, NOW));
   }
 
@@ -258,8 +344,10 @@ class TransactionTest {
   @Test
   void shouldRejectCreditBackToSource() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(postings(transaction).getFirst(),
-        entry(101, TRANSACTION_ID, ACCOUNT_ID, money("100"), LedgerEntryType.CREDIT, 11, NOW));
+    List<LedgerEntry> entries =
+        List.of(
+            postings(transaction).getFirst(),
+            entry(101, TRANSACTION_ID, ACCOUNT_ID, money("100"), LedgerEntryType.CREDIT, 11, NOW));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(entries, NOW));
   }
 
@@ -290,7 +378,8 @@ class TransactionTest {
     Transaction original = settledTransaction();
     Transaction refund = refund(original);
     original.markReversed(refund);
-    assertThrows(InvalidWalletStateException.class, () -> original.markSettled(postings(original), NOW));
+    assertThrows(
+        InvalidWalletStateException.class, () -> original.markSettled(postings(original), NOW));
     assertThrows(InvalidWalletStateException.class, () -> original.markFailed("late"));
     assertThrows(InvalidWalletStateException.class, () -> original.markReversed(refund));
     assertThrows(InvalidWalletStateException.class, original::markPendingSettlement);
@@ -319,8 +408,16 @@ class TransactionTest {
   @Test
   void shouldRejectUnsettledRefund() {
     Transaction original = settledTransaction();
-    Transaction refund = Transaction.initiate(new TransactionId(uuid(20)), IdempotencyKey.of("refund"),
-        TransactionType.REFUND, DESTINATION_ID, ACCOUNT_ID, money("25"), money("0"), NOW);
+    Transaction refund =
+        Transaction.initiate(
+            new TransactionId(uuid(20)),
+            IdempotencyKey.of("refund"),
+            TransactionType.REFUND,
+            DESTINATION_ID,
+            ACCOUNT_ID,
+            money("25"),
+            money("0"),
+            NOW);
     assertThrows(InvalidWalletStateException.class, () -> original.markReversed(refund));
   }
 
@@ -328,8 +425,16 @@ class TransactionTest {
   @Test
   void shouldRejectWrongRefundAmount() {
     Transaction original = settledTransaction();
-    Transaction refund = Transaction.initiate(new TransactionId(uuid(20)), IdempotencyKey.of("refund"),
-        TransactionType.REFUND, DESTINATION_ID, ACCOUNT_ID, money("24"), money("0"), NOW);
+    Transaction refund =
+        Transaction.initiate(
+            new TransactionId(uuid(20)),
+            IdempotencyKey.of("refund"),
+            TransactionType.REFUND,
+            DESTINATION_ID,
+            ACCOUNT_ID,
+            money("24"),
+            money("0"),
+            NOW);
     refund.markSettled(postings(refund), NOW.plusSeconds(2));
     assertThrows(InvalidWalletStateException.class, () -> original.markReversed(refund));
   }
@@ -338,8 +443,16 @@ class TransactionTest {
   @Test
   void shouldRejectRefundCreatedBeforeOriginalSettlement() {
     Transaction original = settledTransaction();
-    Transaction refund = Transaction.initiate(new TransactionId(uuid(20)), IdempotencyKey.of("refund"),
-        TransactionType.REFUND, DESTINATION_ID, ACCOUNT_ID, money("25"), money("0"), CREATED);
+    Transaction refund =
+        Transaction.initiate(
+            new TransactionId(uuid(20)),
+            IdempotencyKey.of("refund"),
+            TransactionType.REFUND,
+            DESTINATION_ID,
+            ACCOUNT_ID,
+            money("25"),
+            money("0"),
+            CREATED);
     refund.markSettled(postings(refund), NOW.plusSeconds(2));
     assertThrows(InvalidWalletStateException.class, () -> original.markReversed(refund));
   }
@@ -348,8 +461,17 @@ class TransactionTest {
   @Test
   void shouldRejectFutureEntryTime() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(postings(transaction).getFirst(),
-        entry(101, TRANSACTION_ID, DESTINATION_ID, money("100"), LedgerEntryType.CREDIT, 10, NOW.plusNanos(1)));
+    List<LedgerEntry> entries =
+        List.of(
+            postings(transaction).getFirst(),
+            entry(
+                101,
+                TRANSACTION_ID,
+                DESTINATION_ID,
+                money("100"),
+                LedgerEntryType.CREDIT,
+                10,
+                NOW.plusNanos(1)));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(entries, NOW));
   }
 
@@ -357,89 +479,236 @@ class TransactionTest {
   @Test
   void shouldRejectPreCreationEntryTime() {
     Transaction transaction = transaction("100", "0");
-    List<LedgerEntry> entries = List.of(postings(transaction).getFirst(),
-        entry(101, TRANSACTION_ID, DESTINATION_ID, money("100"), LedgerEntryType.CREDIT, 10, CREATED.minusNanos(1)));
+    List<LedgerEntry> entries =
+        List.of(
+            postings(transaction).getFirst(),
+            entry(
+                101,
+                TRANSACTION_ID,
+                DESTINATION_ID,
+                money("100"),
+                LedgerEntryType.CREDIT,
+                10,
+                CREATED.minusNanos(1)));
     assertThrows(InvalidWalletStateException.class, () -> transaction.markSettled(entries, NOW));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectOpenWithSettlementSnapshot() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.INITIATED, null, CREATED, NOW, null, null));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.INITIATED,
+                null,
+                CREATED,
+                NOW,
+                null,
+                null));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectPendingWithFailureSnapshot() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.PENDING_SETTLEMENT, "failure", CREATED, null, null, null));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.PENDING_SETTLEMENT,
+                "failure",
+                CREATED,
+                null,
+                null,
+                null));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectFailedWithoutReasonSnapshot() {
-    assertThrows(InvalidDomainArgumentException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.FAILED, null, CREATED, null, null, null));
+    assertThrows(
+        InvalidDomainArgumentException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.FAILED,
+                null,
+                CREATED,
+                null,
+                null,
+                null));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectFailedWithSettlementSnapshot() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.FAILED, "failure", CREATED, NOW, null, null));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.FAILED,
+                "failure",
+                CREATED,
+                NOW,
+                null,
+                null));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectSuccessfulWithoutSettlementSnapshot() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.SUCCESSFUL, null, CREATED, null, null, null));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.SUCCESSFUL,
+                null,
+                CREATED,
+                null,
+                null,
+                null));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectSuccessfulWithFailureSnapshot() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.SUCCESSFUL, "failure", CREATED, NOW, null, null));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.SUCCESSFUL,
+                "failure",
+                CREATED,
+                NOW,
+                null,
+                null));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectReversedWithoutReferenceSnapshot() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.REVERSED, null, CREATED, NOW, null, NOW));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.REVERSED,
+                null,
+                CREATED,
+                NOW,
+                null,
+                NOW));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectReversedWithSelfReferenceSnapshot() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.REVERSED, null, CREATED, NOW, TRANSACTION_ID, NOW));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.REVERSED,
+                null,
+                CREATED,
+                NOW,
+                TRANSACTION_ID,
+                NOW));
   }
 
   /** Rejects inconsistent status metadata during restoration. */
   @Test
   void shouldRejectReversedWithEarlierTimeSnapshot() {
-    assertThrows(InvalidWalletStateException.class, () -> Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.REVERSED, null, CREATED, NOW, new TransactionId(uuid(20)), CREATED));
+    assertThrows(
+        InvalidWalletStateException.class,
+        () ->
+            Transaction.restore(
+                TRANSACTION_ID,
+                IdempotencyKey.of("key"),
+                TransactionType.P2P_TRANSFER,
+                ACCOUNT_ID,
+                DESTINATION_ID,
+                money("100"),
+                money("0"),
+                TransactionStatus.REVERSED,
+                null,
+                CREATED,
+                NOW,
+                new TransactionId(uuid(20)),
+                CREATED));
   }
 
   /** Accepts a consistent stored state without transition events. */
   @Test
   void shouldRestoreInitiatedSnapshot() {
-    Transaction transaction = Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.INITIATED, null, CREATED, null, null, null);
+    Transaction transaction =
+        Transaction.restore(
+            TRANSACTION_ID,
+            IdempotencyKey.of("key"),
+            TransactionType.P2P_TRANSFER,
+            ACCOUNT_ID,
+            DESTINATION_ID,
+            money("100"),
+            money("0"),
+            TransactionStatus.INITIATED,
+            null,
+            CREATED,
+            null,
+            null,
+            null);
     assertEquals(TransactionStatus.INITIATED, transaction.getStatus());
     assertTrue(transaction.pullDomainEvents().isEmpty());
   }
@@ -447,9 +716,21 @@ class TransactionTest {
   /** Accepts a consistent stored state without transition events. */
   @Test
   void shouldRestorePendingSettlementSnapshot() {
-    Transaction transaction = Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.PENDING_SETTLEMENT, null, CREATED, null, null, null);
+    Transaction transaction =
+        Transaction.restore(
+            TRANSACTION_ID,
+            IdempotencyKey.of("key"),
+            TransactionType.P2P_TRANSFER,
+            ACCOUNT_ID,
+            DESTINATION_ID,
+            money("100"),
+            money("0"),
+            TransactionStatus.PENDING_SETTLEMENT,
+            null,
+            CREATED,
+            null,
+            null,
+            null);
     assertEquals(TransactionStatus.PENDING_SETTLEMENT, transaction.getStatus());
     assertTrue(transaction.pullDomainEvents().isEmpty());
   }
@@ -457,9 +738,21 @@ class TransactionTest {
   /** Accepts a consistent stored state without transition events. */
   @Test
   void shouldRestoreFailedSnapshot() {
-    Transaction transaction = Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.FAILED, "failure", CREATED, null, null, null);
+    Transaction transaction =
+        Transaction.restore(
+            TRANSACTION_ID,
+            IdempotencyKey.of("key"),
+            TransactionType.P2P_TRANSFER,
+            ACCOUNT_ID,
+            DESTINATION_ID,
+            money("100"),
+            money("0"),
+            TransactionStatus.FAILED,
+            "failure",
+            CREATED,
+            null,
+            null,
+            null);
     assertEquals(TransactionStatus.FAILED, transaction.getStatus());
     assertTrue(transaction.pullDomainEvents().isEmpty());
   }
@@ -467,9 +760,21 @@ class TransactionTest {
   /** Accepts a consistent stored state without transition events. */
   @Test
   void shouldRestoreSuccessfulSnapshot() {
-    Transaction transaction = Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.SUCCESSFUL, null, CREATED, NOW, null, null);
+    Transaction transaction =
+        Transaction.restore(
+            TRANSACTION_ID,
+            IdempotencyKey.of("key"),
+            TransactionType.P2P_TRANSFER,
+            ACCOUNT_ID,
+            DESTINATION_ID,
+            money("100"),
+            money("0"),
+            TransactionStatus.SUCCESSFUL,
+            null,
+            CREATED,
+            NOW,
+            null,
+            null);
     assertEquals(TransactionStatus.SUCCESSFUL, transaction.getStatus());
     assertTrue(transaction.pullDomainEvents().isEmpty());
   }
@@ -477,9 +782,21 @@ class TransactionTest {
   /** Accepts a consistent stored state without transition events. */
   @Test
   void shouldRestoreReversedSnapshot() {
-    Transaction transaction = Transaction.restore(TRANSACTION_ID, IdempotencyKey.of("key"),
-        TransactionType.P2P_TRANSFER, ACCOUNT_ID, DESTINATION_ID, money("100"), money("0"),
-        TransactionStatus.REVERSED, null, CREATED, NOW, new TransactionId(uuid(20)), NOW);
+    Transaction transaction =
+        Transaction.restore(
+            TRANSACTION_ID,
+            IdempotencyKey.of("key"),
+            TransactionType.P2P_TRANSFER,
+            ACCOUNT_ID,
+            DESTINATION_ID,
+            money("100"),
+            money("0"),
+            TransactionStatus.REVERSED,
+            null,
+            CREATED,
+            NOW,
+            new TransactionId(uuid(20)),
+            NOW);
     assertEquals(TransactionStatus.REVERSED, transaction.getStatus());
     assertTrue(transaction.pullDomainEvents().isEmpty());
   }

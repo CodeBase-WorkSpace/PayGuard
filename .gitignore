@@ -13,3 +13,9 @@ PAYGUARD_GOAL.md
 # Protected local PostgreSQL/Vault rehearsal artifacts
 .local/
 __pycache__/
+
+CLAUDE.md
+payguard-identity/NEW IDEAS.MD
+payguard-identity/ARCHITECTURE.md
+payguard-identity/IDENTITY_CHECKLIST.MD
+NO_LLM_FOR_CODING.MD

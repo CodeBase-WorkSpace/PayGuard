@@ -1,124 +1,275 @@
-# PayGuard
-
-**A privacy-focused, secure modular fintech backend for wallet ledgering, loan origination, and digital-collateral risk management.**
+# PayGuard 🛡️
 
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white)](#)
 [![Java](https://img.shields.io/badge/Java-25-orange?style=flat-square&logo=openjdk)](https://openjdk.org)
+[![Kotlin](https://img.shields.io/badge/Kotlin-JVM-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
-[![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20%7C%20DDD-blueviolet?style=flat-square)](https://alistair.cockburn.us/hexagonal-architecture/)
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](LICENSE)
 
-[Overview](#overview) •
-[Services](#services) •
-[Architecture](#architecture) •
-[Key Engineering Decisions](#key-engineering-decisions) •
-[Getting Started](#getting-started) •
-[API Documentation](#api-documentation) •
-[Roadmap](#roadmap)
+PayGuard is a modular, self-hostable backend for collateral valuation and Loan-to-Value (LTV) monitoring. Built as
+independent services on the JVM.
 
-</div>
+> *Know your LTV before the market tells you.*
 
----
+Status: **pre-alpha**. APIs, event contracts and database schemas may change before `1.0`.
 
-## Overview
+Current checkout: identity service (OTP issue and verify), loan and collateral domain ports with PostgreSQL schemas,
+wallet domain model, API gateway routing, and shared protobuf contracts.
+The HTTP API, valuation pipeline and risk engine shown below describe the target interface and are not implemented yet.
+See [Build and local rehearsal](#build-and-local-rehearsal) for commands that work with this checkout.
 
-PayGuard is a **privacy-focused** and **security-first** backend system designed for a single, coherent financial story: a customer locks digital assets as collateral, borrows against them, and pays the loan back — while the system continuously monitors the collateral's value and protects itself automatically if that value falls too far.
+PayGuard serves lenders, factorers, BNPL providers and banks. A tenant registers collateral (invoices, inventory,
+equipment, real estate, commodities, securities, crypto and tokenized assets), attaches it to loans, and PayGuard keeps
+the LTV current, raises margin calls, and triggers liquidation when thresholds are crossed.
 
-Built on the principle that sensitive systems should run entirely on your own hardware to keep data completely private[cite: 2], PayGuard is designed to be self-hosted, ensuring you retain absolute control over financial records. The project is constructed as a set of **independently deployable microservices**, each owning its own completely isolated database. They communicate only through explicit contracts — never through a shared schema — bringing the risk of data leakage to absolute zero.
+First clone the repository and build it:
 
-It is a deliberate engineering exercise in the domain problems that sit underneath every regulated lending product, executed with the highest security standards:
+```bash
+git clone https://github.com/<your-org>/payguard.git
+cd payguard
+./mvnw -B -ntp clean verify
+```
 
-- **Immutable and privacy-preserving ledgers:** Double-entry bookkeeping and derived, never-stored balances to eliminate data tampering.
-- **Secure and idempotent financial operations:** Guaranteed transaction integrity under concurrent access.
-- Loan amortization, repayment waterfalls, and delinquency state machines built for strict auditability.
-- Loan-to-Value (LTV) risk monitoring, margin calls, and liquidation via protected, automated mechanisms.
-- **Strict service-to-service communication boundaries:** REST at the edge for external clients, and secure gRPC where internal latency and security matter.
+Then start the infrastructure (PostgreSQL and Vault) and the applications:
 
-It is not a payment-card switch or a full core-banking platform. The scope is intentionally narrow so that every part of the architecture can be built, understood, and defended in depth against security vulnerabilities.
+```bash
+docker compose --profile applications up
+```
 
----
+- Starts one private PostgreSQL database per business service
+- Starts Vault with a scoped AppRole per service
+- Runs Flyway migrations with a separate migration identity before applications start
 
-## Core Capabilities
+Talk to it over REST (target API):
 
-### Implemented / In Progress
+```http
+POST /v1/loans
+Authorization: Bearer <api-key>
 
-- [ ] Account creation and double-entry ledger posting (`wallet-service`)
-- [ ] Hold → capture → release flow for provisional balance reservations
-- [ ] Loan application, approval, and amortization-schedule generation (`loan-service`)
-- [ ] Repayment waterfall (fees → interest → principal)
-- [ ] Collateral locking and Loan-to-Value calculation (`collateral-service`)
-- [ ] Margin-call and liquidation risk monitoring
-- [x] API Gateway routing (REST-in, gRPC-out to internal services)
+{
+  "borrower_id": "b_123",
+  "principal": 100000,
+  "currency": "USD",
+  "interest_rate": 0.08,
+  "term_months": 12,
+  "asset_ids": ["a_456"],
+  "ruleset_id": "default"
+}
+```
 
-### Planned
+```http
+GET /v1/loans/{id}/ltv
 
-- [ ] Kafka-based domain events between services (e.g. loan approval → collateral linkage)
-- [x] Full CI pipeline (build, test, static analysis) via GitHub Actions
-- [ ] Expanded integration and concurrency test coverage
+{ "ltv_current": 0.62, "status": "healthy", "buffer": 0.18, "components": [ ... ] }
+```
 
-> This README describes the target architecture and is kept in sync with implementation status via the checkboxes above — see [Current Limitations](#current-limitations) for what is intentionally out of scope for now.
+## Start using PayGuard
 
----
+Register collateral, request a valuation, then read the LTV:
 
-## Services
+```http
+POST /v1/assets                       { type, external_id, borrower_id, currency, metadata, documents }
+POST /v1/assets/{id}/valuations       { trigger, requested_by }
+GET  /v1/loans/{id}/ltv
+PUT  /v1/loans/{id}/thresholds        { ltv_initial_max, ltv_maintenance, ltv_liquidation }
+```
 
-| Service | Responsibility | Persistence | Current State |
-|---|---|---|---|
-| `wallet-service` | Account balances, double-entry ledger, holds/captures | Dedicated PostgreSQL database with jOOQ Open Source configured; SQL adapter pending | In development |
-| `loan-service` | Loan lifecycle, amortization schedules, repayments | Dedicated PostgreSQL schema; JPA repository adapter pending | In development |
-| `collateral-service` | Collateral locking, price valuation, LTV monitoring, liquidation | Dedicated PostgreSQL schema; JPA repository adapter pending | In development |
-| `api-gateway` | Single entry point; REST from clients, gRPC to internal services | — | Planned |
+Subscribe to events instead of polling:
 
-> `wallet-service` deliberately uses jOOQ instead of JPA: a ledger is append-only, and jOOQ gives explicit control over `INSERT`-only SQL with no risk of an accidental `UPDATE` slipping in through dirty-checking. `loan-service` and `collateral-service` manage mutable, CRUD-shaped state, where JPA is a better fit.
+```http
+POST /v1/webhooks   { url, events: ["loan.margin_call", "loan.liquidation"], secret, active }
+```
 
----
+Events include `asset.created`, `valuation.updated`, `valuation.failed`, `asset.stale_price`, `risk_rule.violated`,
+`loan.margin_call` and `loan.liquidation`.
+
+## Principles
+
+#### Isolated
+
+Each business service owns its database, runtime group, schema owner and Vault AppRole. Services talk only through
+explicit contracts: REST at the edge, gRPC between services, domain events for state changes. There are no foreign keys
+and no table reads across service databases.
+
+#### Auditable
+
+The ledger is double-entry and append-only. Balances are derived, never stored. Every state change writes an
+immutable audit record with actor, action and entity. Financial operations are idempotent under concurrent access.
+
+#### Explicit
+
+Domain rules live in the domain, use-case coordination in the application layer, and JDBC, JPA, jOOQ and Vault details
+in infrastructure (hexagonal architecture with DDD). Thresholds, haircuts and risk rules are data you configure per
+tenant, with documented defaults.
+
+#### Principled
+
+PayGuard does not try to be a full core-banking platform or a payment-card switch. The scope is narrow so each part can
+be built, understood and defended in depth.
+
+Example limitations:
+
+- No provider delivery, customer enrollment or external authentication yet.
+- No HA or auto-unseal for Vault yet.
+- No durable event delivery yet. Kafka events are planned.
+- Valuation quality depends on the external price providers you connect.
 
 ## Architecture
 
-### System Overview
+```text
+Customers (Lender / Factorer / BNPL / Bank)
+        │ HTTPS + Webhook
+        ▼
+API Gateway → Rate Limiter → Auth
+        │ gRPC
+        ▼
+┌─────────────────────────────────────────────┐
+│                Core Services                │
+│  Identity    │ Asset Registry │ Valuation   │
+│  Wallet      │ Risk Engine    │ Alert       │
+│  Loan        │ Collateral/LTV │ Webhook     │
+│  Audit Log   │ Billing        │ Reporting   │
+└─────────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────────┐
+│                  Data Layer                 │
+│  PostgreSQL (per service) │ Kafka (events)  │
+│  Vault (secrets)          │ Object storage  │
+└─────────────────────────────────────────────┘
+        │
+        ▼
+External data providers (Chainlink, Pyth, CoinGecko,
+Refinitiv, Zillow, Dun & Bradstreet, ...)
+```
 
-## Current services
+### Valuation pipeline
 
-| Module | Persistence available in source | Current database integration |
-| --- | --- | --- |
-| `payguard-identity-service` | JPA challenge/audit adapters; existing-customer OTP issue/verify | PostgreSQL 17.11, Flyway, serialized verification/replacement; Vault database leases and scoped KV secrets |
-| `payguard-loan-service` | Domain/application ports and loan SQL schema; concrete repository adapter absent | PostgreSQL schema and real precision/constraint tests; Vault pool |
-| `payguard-collateral-service` | Domain/application ports and collateral SQL schema; concrete repository adapter absent | PostgreSQL schema and real valuation/constraint tests; Vault pool |
-| `payguard-wallet-service` | Domain/ports and OSS jOOQ dependency; no SQL schema, adapter or code-generation configuration | POSTGRES dialect and Vault pool configured; ledger persistence remains separate work |
-| `payguard-api-gateway`, `payguard-proto` | No owned database | Database-free |
+Trigger → source fan-out (2 s timeout, retries) → normalizer → outlier filter → weighted aggregator →
+confidence scorer → haircut engine → persister → event emitter.
 
-Identity contains access, customer, verification and registration modules in one deployment and one owned database. Access and registration workflows remain largely planned. The retired step-up-token endpoint is not restored.
+```text
+haircut = min(0.95, base + 0.5 × σ30d + 100k / volume + FX + concentration + staleness)
+```
 
-## Ownership and engineering decisions
+Confidence at or above 0.75 is high, 0.45 to 0.75 is medium, below 0.45 is low and raises an alert.
 
-Each business service has its own PostgreSQL database, runtime group, durable schema owner and independently scoped Vault AppRole. Local rehearsal uses four private PostgreSQL containers. Runtime roles have DML privileges; Flyway runs through a separate migration identity. Applications never receive a database administrator or Vault root token.
+### Risk rules
 
-Domain rules remain in the domain, use-case coordination in application code, and JDBC/JPA/jOOQ/Vault details in infrastructure. Wallet's intended append-only ledger and hold/capture separation remain design decisions; the absent SQL adapter means their persisted concurrency behavior has not been established. Loan and Collateral continue to use their existing JPA dependency rather than being rewritten to jOOQ. Cross-service access belongs behind explicit ports, with no foreign keys or table reads across service databases.
+- **LTV thresholds:** initial max 0.70, maintenance 0.80 (margin call), liquidation 0.90 (after a 24 hour grace period).
+  Configurable per asset class.
+- **Concentration limits:** per asset, borrower, sector, country, currency, asset class and more.
+- **Currency mismatch:** extra haircut for cross-currency collateral.
+- **Stale prices:** per asset class, from a freeze with a critical alert to a daily haircut increase.
+- **Circuit breakers:** asset-class, asset, provider and system kill switch.
+- **AML and KYC:** tiered limits and sanctions screening.
+- **SLA escalation:** acknowledge and resolve deadlines per severity.
 
-- [PostgreSQL ownership and cutover ADR](docs/decission/ADR-0011-postgresql-service-ownership-and-cutover.md)
-- [Vault secrets, bootstrap and licensing ADR](docs/decission/ADR-0012-vault-service-secrets-and-bootstrap.md)
-- [Database credential and pool lifecycle ADR](docs/decission/ADR-0013-database-leases-and-pool-replacement.md)
-- [OTP concurrency ADR](docs/decission/ADR-0014-otp-postgresql-concurrency.md)
-- [Identity architecture](payguard-identity-service/ARCHITECTURE.md)
+### Supported collateral
+
+| Class         | Examples                                      | Refresh                  |
+|---------------|-----------------------------------------------|--------------------------|
+| Physical      | Invoice, inventory, equipment, real estate    | Daily to monthly         |
+| Markets       | Commodities, securities                       | 15 minutes to 60 seconds |
+| Digital       | Crypto spot, DeFi collateral, LP tokens, LSTs | 5 to 60 seconds          |
+| Other digital | NFTs, tokenized real-world assets             | 15 minutes to hourly     |
+
+## Services
+
+Each service is an independently deployable module.
+
+| Artifact                      | Purpose                                                               |
+|-------------------------------|-----------------------------------------------------------------------|
+| `payguard-identity-service`   | Access, customer, verification and registration. OTP issue and verify |
+| `payguard-wallet-service`     | Account balances, double-entry ledger, holds and captures             |
+| `payguard-loan-service`       | Loan lifecycle, amortization schedules, repayment waterfall           |
+| `payguard-collateral-service` | Collateral locking, LTV calculation, margin calls, liquidation        |
+| `payguard-api-gateway`        | Single entry point. REST from clients, gRPC to internal services      |
+| `payguard-proto`              | Shared protobuf contracts                                             |
+| `payguard-valuation-service`  | Price fan-out, aggregation, haircuts, confidence scoring (planned)    |
+| `payguard-risk-service`       | Risk rules engine and concentration checks (planned)                  |
+| `payguard-alert-service`      | Alerts, escalation and webhook delivery (planned)                     |
+| `payguard-audit-service`      | Immutable audit log (planned)                                         |
+| `payguard-billing-service`    | Usage metering and invoicing (planned)                                |
+| `payguard-reporting-service`  | KPI dashboards and exports (planned)                                  |
+
+### Current state
+
+| Module                                   | Persistence available in source                                                      | Current database integration                                                                                   |
+|------------------------------------------|--------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
+| `payguard-identity-service`              | JPA challenge and audit adapters; existing-customer OTP issue and verify             | PostgreSQL 17.11, Flyway, serialized verification and replacement; Vault database leases and scoped KV secrets |
+| `payguard-loan-service`                  | Domain and application ports, loan SQL schema; repository adapter absent             | PostgreSQL schema and real precision and constraint tests; Vault pool                                          |
+| `payguard-collateral-service`            | Domain and application ports, collateral SQL schema; repository adapter absent       | PostgreSQL schema and real valuation and constraint tests; Vault pool                                          |
+| `payguard-wallet-service`                | Domain, ports and OSS jOOQ dependency; no SQL schema, adapter or code generation yet | PostgreSQL dialect and Vault pool configured; ledger persistence is separate work                              |
+| `payguard-api-gateway`, `payguard-proto` | No owned database                                                                    | Database-free                                                                                                  |
+
+> `wallet-service` uses jOOQ instead of JPA on purpose: a ledger is append-only, and jOOQ gives explicit control over
+> `INSERT`-only SQL with no risk of an accidental `UPDATE` through dirty-checking. `loan-service` and
+> `collateral-service` manage mutable, CRUD-shaped state, where JPA is a better fit.
+
+## Requirements
+
+PayGuard runs on the JVM. Use JDK **25**, Docker and Compose, Ansible and OpenSSL. The Maven wrapper is included.
+Database integration tests start real PostgreSQL containers.
 
 ## Build and local rehearsal
-
-Use JDK **25**, Docker/Compose, Ansible and OpenSSL. The Maven wrapper is included. Database integration tests start real PostgreSQL containers; they do not require an unset opt-in flag.
 
 ```bash
 ./mvnw -B -ntp clean verify
 ```
 
-Historical Identity verification is recorded in [the publication repair log](docs/tasks/identity-publication-repair.md). It does not validate the new Vault Agent lifecycle; see [current infrastructure validation](docs/infrastructure-validation.md).
+For the Compose, Vault Agent, Ansible and Flyway CLI deployment,
+follow [the infrastructure runbook](docs/infrastructure.md).
+It gives the exact preparation, initialization, migration and test commands.
 
-For the Compose, Vault Agent, Ansible and Flyway CLI deployment, follow [the infrastructure runbook](docs/infrastructure.md). It gives the exact preparation, initialization, migration and test commands. Generated credentials, certificates and unseal material live under ignored `.local/payguard` with protected permissions. `.env.example` contains only public settings. Never copy secrets into an image or publish that directory.
+- Generated credentials, certificates and unseal material live under ignored `.local/payguard` with protected
+  permissions.
+- `.env.example` contains only public settings. Never copy secrets into an image or publish that directory.
+- Runtime Flyway is disabled. Apply migrations with the migration identity before starting applications.
+- The `applications` Compose profile is separate from the database and Vault infrastructure.
+- Runtime roles have DML privileges only. Applications never receive a database administrator or Vault root token.
 
-Runtime Flyway is disabled: apply migrations using the migration identity before starting applications. The `applications` Compose profile is separate from the database/Vault infrastructure. Provider delivery, customer enrollment, external authentication, production certificate issuance, HA/auto-unseal and durable event delivery are not implemented by this migration.
+## Documentation
+
+- [Infrastructure runbook](docs/infrastructure.md)
+  and [current infrastructure validation](docs/infrastructure-validation.md)
+- [Identity architecture](payguard-identity/ARCHITECTURE.md)
+- [PostgreSQL ownership and cutover ADR](docs/decission/ADR-0011-postgresql-service-ownership-and-cutover.md)
+- [Vault secrets, bootstrap and licensing ADR](docs/decission/ADR-0012-vault-service-secrets-and-bootstrap.md)
+- [Database credential and pool lifecycle ADR](docs/decission/ADR-0013-database-leases-and-pool-replacement.md)
+- [OTP concurrency ADR](docs/decission/ADR-0014-otp-postgresql-concurrency.md)
+- [Migration guide](docs/guides/postgresql-vault-migration.md), [work log](docs/tasks/postgresql-vault-migration.md)
+  and [follow-up issue drafts](docs/issues/postgresql-vault-follow-up.md)
 
 ## Existing data and historical decisions
 
-Oracle scripts are preserved byte-for-byte under each owning module's `db/legacy/oracle`. PostgreSQL has a separate migration history and never executes those scripts. No existing volume is deleted or treated as empty. Legacy UUID challenge/customer records require an approved persistent identifier mapping; no identities are regenerated to make an import succeed.
+PostgreSQL migrations live under each owning module's `db/migration/postgresql`. No existing volume is deleted or treated as empty. Legacy UUID
+records need an approved persistent identifier mapping; no identities are regenerated to make an import succeed.
 
-The cutover is an offline write freeze, rehearsed export/import and reconciliation. After PostgreSQL accepts new writes, returning to Oracle requires reverse migration or reconciliation; retaining an old volume alone is insufficient. Historical ADRs retain their original context, with database-related decisions superseded by ADR 0011–0014.
+The cutover is an offline write freeze, a rehearsed export and import, and reconciliation. After PostgreSQL accepts new
+writes, returning to a previous database requires reverse migration or reconciliation. Historical ADRs keep their original context,
+with database decisions superseded by ADR 0011 to 0014.
 
-See [the migration guide](docs/guides/postgresql-vault-migration.md), [durable work log](docs/tasks/postgresql-vault-migration.md) and [separate issue drafts](docs/issues/postgresql-vault-follow-up.md) for actual verification evidence and remaining work.
+## Reporting Issues / Support
+
+Please use the [issue tracker](../../issues) for feature requests and bugs. For questions, open a
+[discussion](../../discussions).
+
+## Reporting Security Vulnerabilities
+
+If you find a security vulnerability in PayGuard, please do not open a public issue. Report it through the repository's
+private security advisory feature. See [SECURITY.md](SECURITY.md).
+
+## Inspirations
+
+The domain problems under every regulated lending product: double-entry ledgers, margin lending and collateral
+management. The module and decision-record discipline of Spring, Kafka and OkHttp.
+
+## Contributing
+
+Please see [the contribution guide](CONTRIBUTING.md) and the [Code of conduct](CODE_OF_CONDUCT.md) before contributing.
+Written code rules are in [CODE_RULES.md](CODE_RULES.md).
+
+## License
+
+PayGuard is distributed under the terms of the MIT License. See [LICENSE](LICENSE).

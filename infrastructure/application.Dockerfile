@@ -4,6 +4,6 @@ FROM eclipse-temurin:25-jre-alpine@sha256:b7528962e65d43064d8a8b67ba175367896bc9
 COPY --from=vault /bin/vault /usr/local/bin/vault
 ARG SERVICE
 WORKDIR /app
-COPY payguard-${SERVICE}-service/target/payguard-${SERVICE}-service-1.0.0-SNAPSHOT.jar /app/service.jar
+COPY payguard-${SERVICE}/target/payguard-${SERVICE}-1.0.0-SNAPSHOT.jar /app/service.jar
 USER 1000:1000
 ENTRYPOINT ["vault", "agent"]

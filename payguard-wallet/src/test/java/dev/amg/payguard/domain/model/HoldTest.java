@@ -9,8 +9,6 @@ import dev.amg.payguard.domain.exception.*;
 import dev.amg.payguard.domain.value_object.*;
 import domain.InvalidDomainArgumentException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** Tests expiry boundaries, terminal states, event contents and restore invariants. */
@@ -98,36 +96,63 @@ class HoldTest {
   /** Zero reservations are not valid domain operations. */
   @Test
   void shouldRejectZeroHold() {
-    assertThrows(InvalidHoldStateException.class, () -> Hold.createNew(HOLD_ID, WALLET_ID,
-        money("0"), "reason", "reference", DEADLINE, CREATED));
+    assertThrows(
+        InvalidHoldStateException.class,
+        () ->
+            Hold.createNew(
+                HOLD_ID, WALLET_ID, money("0"), "reason", "reference", DEADLINE, CREATED));
   }
 
   /** Negative reservation amounts are rejected. */
   @Test
   void shouldRejectNegativeHold() {
-    assertThrows(NegativeAmountNotAllowedException.class, () -> Hold.createNew(HOLD_ID, WALLET_ID,
-        money("-1"), "reason", "reference", DEADLINE, CREATED));
+    assertThrows(
+        NegativeAmountNotAllowedException.class,
+        () ->
+            Hold.createNew(
+                HOLD_ID, WALLET_ID, money("-1"), "reason", "reference", DEADLINE, CREATED));
   }
 
   /** A newly created hold must have a nonempty validity interval. */
   @Test
   void shouldRejectDeadlineEqualToCreation() {
-    assertThrows(InvalidHoldStateException.class, () -> Hold.createNew(HOLD_ID, WALLET_ID,
-        money("1"), "reason", "reference", CREATED, CREATED));
+    assertThrows(
+        InvalidHoldStateException.class,
+        () ->
+            Hold.createNew(
+                HOLD_ID, WALLET_ID, money("1"), "reason", "reference", CREATED, CREATED));
   }
 
   /** Rejects a reversed validity interval. */
   @Test
   void shouldRejectDeadlineBeforeCreation() {
-    assertThrows(InvalidHoldStateException.class, () -> Hold.createNew(HOLD_ID, WALLET_ID,
-        money("1"), "reason", "reference", CREATED.minusNanos(1), CREATED));
+    assertThrows(
+        InvalidHoldStateException.class,
+        () ->
+            Hold.createNew(
+                HOLD_ID,
+                WALLET_ID,
+                money("1"),
+                "reason",
+                "reference",
+                CREATED.minusNanos(1),
+                CREATED));
   }
 
   /** Restores valid terminal state without replaying a captured event. */
   @Test
   void shouldRestoreCapturedWithoutEvents() {
-    Hold hold = Hold.restore(HOLD_ID, WALLET_ID, money("30"), "reason", "reference",
-        DEADLINE, CREATED, HoldStatus.CAPTURED, NOW);
+    Hold hold =
+        Hold.restore(
+            HOLD_ID,
+            WALLET_ID,
+            money("30"),
+            "reason",
+            "reference",
+            DEADLINE,
+            CREATED,
+            HoldStatus.CAPTURED,
+            NOW);
     assertEquals(HoldStatus.CAPTURED, hold.getStatus());
     assertTrue(hold.pullDomainEvents().isEmpty());
   }
@@ -228,56 +253,114 @@ class HoldTest {
   /** Restoration enforces the same lifecycle invariants as normal commands. */
   @Test
   void shouldRejectPendingWithResolution() {
-    assertThrows(InvalidHoldStateException.class, () -> Hold.restore(HOLD_ID, WALLET_ID,
-        money("30"), "reason", "reference", DEADLINE, CREATED, HoldStatus.PENDING, NOW));
+    assertThrows(
+        InvalidHoldStateException.class,
+        () ->
+            Hold.restore(
+                HOLD_ID,
+                WALLET_ID,
+                money("30"),
+                "reason",
+                "reference",
+                DEADLINE,
+                CREATED,
+                HoldStatus.PENDING,
+                NOW));
   }
 
   /** Restoration enforces the same lifecycle invariants as normal commands. */
   @Test
   void shouldRejectTerminalWithoutResolution() {
-    assertThrows(InvalidHoldStateException.class, () -> Hold.restore(HOLD_ID, WALLET_ID,
-        money("30"), "reason", "reference", DEADLINE, CREATED, HoldStatus.CAPTURED, null));
+    assertThrows(
+        InvalidHoldStateException.class,
+        () ->
+            Hold.restore(
+                HOLD_ID,
+                WALLET_ID,
+                money("30"),
+                "reason",
+                "reference",
+                DEADLINE,
+                CREATED,
+                HoldStatus.CAPTURED,
+                null));
   }
 
   /** Restoration enforces the same lifecycle invariants as normal commands. */
   @Test
   void shouldRejectLateCapturedSnapshot() {
-    assertThrows(InvalidHoldStateException.class, () -> Hold.restore(HOLD_ID, WALLET_ID,
-        money("30"), "reason", "reference", DEADLINE, CREATED, HoldStatus.CAPTURED, DEADLINE));
+    assertThrows(
+        InvalidHoldStateException.class,
+        () ->
+            Hold.restore(
+                HOLD_ID,
+                WALLET_ID,
+                money("30"),
+                "reason",
+                "reference",
+                DEADLINE,
+                CREATED,
+                HoldStatus.CAPTURED,
+                DEADLINE));
   }
 
   /** Restoration enforces the same lifecycle invariants as normal commands. */
   @Test
   void shouldRejectPrematureExpiredSnapshot() {
-    assertThrows(InvalidHoldStateException.class, () -> Hold.restore(HOLD_ID, WALLET_ID,
-        money("30"), "reason", "reference", DEADLINE, CREATED, HoldStatus.EXPIRED, NOW));
+    assertThrows(
+        InvalidHoldStateException.class,
+        () ->
+            Hold.restore(
+                HOLD_ID,
+                WALLET_ID,
+                money("30"),
+                "reason",
+                "reference",
+                DEADLINE,
+                CREATED,
+                HoldStatus.EXPIRED,
+                NOW));
   }
 
   /** Restoration enforces the same lifecycle invariants as normal commands. */
   @Test
   void shouldRejectPreCreationResolution() {
-    assertThrows(InvalidHoldStateException.class, () -> Hold.restore(HOLD_ID, WALLET_ID,
-        money("30"), "reason", "reference", DEADLINE, CREATED, HoldStatus.RELEASED, CREATED.minusNanos(1)));
+    assertThrows(
+        InvalidHoldStateException.class,
+        () ->
+            Hold.restore(
+                HOLD_ID,
+                WALLET_ID,
+                money("30"),
+                "reason",
+                "reference",
+                DEADLINE,
+                CREATED,
+                HoldStatus.RELEASED,
+                CREATED.minusNanos(1)));
   }
 
   /** Rejects missing descriptive metadata before construction. */
   @Test
   void shouldRejectBlankReason() {
-    assertThrows(InvalidDomainArgumentException.class, () -> Hold.createNew(HOLD_ID, WALLET_ID,
-        money("1"), " ", "ref", DEADLINE, CREATED));
+    assertThrows(
+        InvalidDomainArgumentException.class,
+        () -> Hold.createNew(HOLD_ID, WALLET_ID, money("1"), " ", "ref", DEADLINE, CREATED));
   }
 
   /** Rejects missing descriptive metadata before construction. */
   @Test
   void shouldRejectBlankReference() {
-    assertThrows(InvalidDomainArgumentException.class, () -> Hold.createNew(HOLD_ID, WALLET_ID,
-        money("1"), "reason", " ", DEADLINE, CREATED));
+    assertThrows(
+        InvalidDomainArgumentException.class,
+        () -> Hold.createNew(HOLD_ID, WALLET_ID, money("1"), "reason", " ", DEADLINE, CREATED));
   }
 
   /** Rejects missing descriptive metadata before construction. */
   @Test
   void shouldRejectNullReason() {
-    assertThrows(InvalidDomainArgumentException.class, () -> Hold.createNew(HOLD_ID, WALLET_ID,
-        money("1"), null, "ref", DEADLINE, CREATED));
+    assertThrows(
+        InvalidDomainArgumentException.class,
+        () -> Hold.createNew(HOLD_ID, WALLET_ID, money("1"), null, "ref", DEADLINE, CREATED));
   }
 }

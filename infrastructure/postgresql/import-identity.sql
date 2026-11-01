@@ -3,11 +3,11 @@
 -- Timestamps require an explicit UTC offset. PostgreSQL stores microsecond precision.
 SET LOCAL search_path TO payguard;
 SET LOCAL statement_timeout = '5min';
-LOCK TABLE identity_challenge, identity_audit_log, identity_challenge_scope IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE identity_otp, identity_audit_log, identity_otp_scope, identity_outbox IN ACCESS EXCLUSIVE MODE;
 DO $guard$
 BEGIN
-  IF EXISTS (SELECT 1 FROM identity_challenge) OR EXISTS (SELECT 1 FROM identity_audit_log)
-     OR EXISTS (SELECT 1 FROM identity_challenge_scope)
+  IF EXISTS (SELECT 1 FROM identity_otp) OR EXISTS (SELECT 1 FROM identity_audit_log)
+     OR EXISTS (SELECT 1 FROM identity_otp_scope) OR EXISTS (SELECT 1 FROM identity_outbox)
   THEN RAISE EXCEPTION 'Identity import destination is populated'; END IF;
 END
 $guard$;
@@ -38,25 +38,25 @@ BEGIN
   ) THEN RAISE EXCEPTION 'Audit timestamp offset required'; END IF;
 END
 $guard$;
-INSERT INTO identity_challenge
+INSERT INTO identity_otp
 (id,user_id,purpose,channel,verification_mode,code_hash,device_binding_hash,attempts,max_attempts,status,created_at,expires_at,consumed_at,retention_until)
 SELECT CASE WHEN c->>'id' ~ '^otp_[A-Za-z0-9]{22}$' THEN c->>'id' ELSE mapping->'challenges'->>(c->>'id') END,
        CASE WHEN c->>'user_id' ~ '^cus_[A-Za-z0-9]{22}$' THEN c->>'user_id' ELSE mapping->'customers'->>(c->>'user_id') END,
        c->>'purpose',c->>'channel',c->>'verification_mode',c->>'code_hash',c->>'device_binding_hash',
-       (c->>'attempts')::integer,(c->>'max_attempts')::integer,c->>'status',
+       (c->>'attempts')::integer,(c->>'max_attempts')::integer,(c->>'status')::identity_status,
        regexp_replace(c->>'created_at', '(\.[0-9]{6})[0-9]+', '\1')::timestamptz,regexp_replace(c->>'expires_at', '(\.[0-9]{6})[0-9]+', '\1')::timestamptz,regexp_replace(c->>'consumed_at', '(\.[0-9]{6})[0-9]+', '\1')::timestamptz,regexp_replace(c->>'retention_until', '(\.[0-9]{6})[0-9]+', '\1')::timestamptz
 FROM pg_temp.import_document, LATERAL jsonb_array_elements(source->'challenges') c;
-INSERT INTO identity_audit_log (id,challenge_id,user_id,action,reason,source_ip,occurred_at)
+INSERT INTO identity_audit_log (id,otp_id,user_id,action,reason,source_ip,occurred_at)
 SELECT (a->>'id')::uuid,
        CASE WHEN a->>'challenge_id' ~ '^otp_[A-Za-z0-9]{22}$' THEN a->>'challenge_id' ELSE mapping->'challenges'->>(a->>'challenge_id') END,
        CASE WHEN a->>'user_id' ~ '^cus_[A-Za-z0-9]{22}$' THEN a->>'user_id' ELSE mapping->'customers'->>(a->>'user_id') END,
        a->>'action',a->>'reason',a->>'source_ip',regexp_replace(a->>'occurred_at', '(\.[0-9]{6})[0-9]+', '\1')::timestamptz
 FROM pg_temp.import_document, LATERAL jsonb_array_elements(source->'audit') a;
-INSERT INTO identity_challenge_scope (user_id,purpose) SELECT DISTINCT user_id,purpose FROM identity_challenge;
+INSERT INTO identity_otp_scope (user_id,purpose) SELECT DISTINCT user_id,purpose FROM identity_otp;
 DO $reconcile$
 BEGIN
-  IF EXISTS (SELECT 1 FROM identity_audit_log a JOIN identity_challenge c ON c.id=a.challenge_id WHERE a.user_id<>c.user_id)
-     OR (SELECT count(*) FROM identity_challenge)<>(SELECT jsonb_array_length(source->'challenges') FROM pg_temp.import_document)
+  IF EXISTS (SELECT 1 FROM identity_audit_log a JOIN identity_otp c ON c.id=a.otp_id WHERE a.user_id<>c.user_id)
+     OR (SELECT count(*) FROM identity_otp)<>(SELECT jsonb_array_length(source->'challenges') FROM pg_temp.import_document)
      OR (SELECT count(*) FROM identity_audit_log)<>(SELECT jsonb_array_length(source->'audit') FROM pg_temp.import_document)
   THEN RAISE EXCEPTION 'Identity import reconciliation failed'; END IF;
 END

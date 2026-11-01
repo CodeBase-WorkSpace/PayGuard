@@ -8,12 +8,12 @@ import java.util.regex.Pattern;
 /**
  * An exact, case-sensitive, client-supplied idempotency key.
  *
- * <p>The protocol for this Wallet module accepts 1 to 255 ASCII characters from
- * A-Z, a-z, 0-9, period, underscore, tilde and hyphen. Keys are never trimmed,
- * case-folded or otherwise normalized.
+ * <p>The protocol for this Wallet module accepts 1 to 255 ASCII characters from A-Z, a-z, 0-9,
+ * period, underscore, tilde and hyphen. Keys are never trimmed, case-folded or otherwise
+ * normalized.
  *
- * <p>Tenant/operation scope, request fingerprint, status, and timestamps belong
- * to the persisted idempotency record, not to this value object.
+ * <p>Tenant/operation scope, request fingerprint, status, and timestamps belong to the persisted
+ * idempotency record, not to this value object.
  *
  * @param value the exact idempotency key
  */

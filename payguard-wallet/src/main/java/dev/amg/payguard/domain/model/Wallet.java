@@ -22,13 +22,13 @@ import java.util.Currency;
 /**
  * A single-currency, non-overdraft customer wallet backed by an explicit ledger account.
  *
- * <p>Always maintains {@code 0 <= reservedBalance <= bookBalance}. Credits increase
- * this customer-liability balance; debits decrease it. This is not a generic GL account.
+ * <p>Always maintains {@code 0 <= reservedBalance <= bookBalance}. Credits increase this
+ * customer-liability balance; debits decrease it. This is not a generic GL account.
  *
- * <p>Instances are mutable and MUST be confined to one command/unit of work, never
- * shared across threads or cached as live aggregates. Repository locking or versioned
- * conditional updates are required for concurrent commands. The loaded version is an
- * expected persistence version, not an in-memory mutation counter.
+ * <p>Instances are mutable and MUST be confined to one command/unit of work, never shared across
+ * threads or cached as live aggregates. Repository locking or versioned conditional updates are
+ * required for concurrent commands. The loaded version is an expected persistence version, not an
+ * in-memory mutation counter.
  */
 public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
   private final AccountId accountId;
@@ -42,9 +42,18 @@ public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
   private Instant updatedAt;
   private long lastAppliedSequenceNumber;
 
-  private Wallet(WalletId id, AccountId accountId, UserId userId, Currency currency,
-      WalletStatus status, Money bookBalance, Money reservedBalance, long version,
-      long lastAppliedSequenceNumber, Instant createdAt, Instant updatedAt) {
+  private Wallet(
+      WalletId id,
+      AccountId accountId,
+      UserId userId,
+      Currency currency,
+      WalletStatus status,
+      Money bookBalance,
+      Money reservedBalance,
+      long version,
+      long lastAppliedSequenceNumber,
+      Instant createdAt,
+      Instant updatedAt) {
     super(id);
     this.accountId = DomainValidation.requireNonNull(accountId, "Ledger account id");
     this.userId = DomainValidation.requireNonNull(userId, "User id");
@@ -75,20 +84,50 @@ public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
   }
 
   /** Creates an empty wallet with an explicitly assigned ledger account; emits one event. */
-  public static Wallet create(WalletId id, AccountId accountId, UserId userId,
-      Currency currency, Instant now) {
-    Wallet wallet = new Wallet(id, accountId, userId, currency, WalletStatus.ACTIVE,
-        Money.zero(currency), Money.zero(currency), 0L, -1L, now, now);
+  public static Wallet create(
+      WalletId id, AccountId accountId, UserId userId, Currency currency, Instant now) {
+    Wallet wallet =
+        new Wallet(
+            id,
+            accountId,
+            userId,
+            currency,
+            WalletStatus.ACTIVE,
+            Money.zero(currency),
+            Money.zero(currency),
+            0L,
+            -1L,
+            now,
+            now);
     wallet.registerEvent(WalletCreatedEvent.now(id, userId, currency, now));
     return wallet;
   }
 
   /** Restores validated persisted state without emitting creation or transition events. */
-  public static Wallet restore(WalletId id, AccountId accountId, UserId userId, Currency currency,
-      WalletStatus status, Money bookBalance, Money reservedBalance, long version,
-      long lastAppliedSequenceNumber, Instant createdAt, Instant updatedAt) {
-    return new Wallet(id, accountId, userId, currency, status, bookBalance, reservedBalance,
-        version, lastAppliedSequenceNumber, createdAt, updatedAt);
+  public static Wallet restore(
+      WalletId id,
+      AccountId accountId,
+      UserId userId,
+      Currency currency,
+      WalletStatus status,
+      Money bookBalance,
+      Money reservedBalance,
+      long version,
+      long lastAppliedSequenceNumber,
+      Instant createdAt,
+      Instant updatedAt) {
+    return new Wallet(
+        id,
+        accountId,
+        userId,
+        currency,
+        status,
+        bookBalance,
+        reservedBalance,
+        version,
+        lastAppliedSequenceNumber,
+        createdAt,
+        updatedAt);
   }
 
   /** Returns spendable funds; holds are already excluded from this amount. */
@@ -117,7 +156,7 @@ public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
   public void reserveFunds(Money amount, Instant now) {
     validateMutationTime(now);
     assertCanDebit(amount);
-      reservedBalance = reservedBalance.add(amount);
+    reservedBalance = reservedBalance.add(amount);
     updatedAt = now;
   }
 
@@ -129,29 +168,30 @@ public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
     if (reservedBalance.isLessThan(amount)) {
       throw new InvalidWalletStateException("Cannot release more than the reserved balance");
     }
-      reservedBalance = reservedBalance.subtract(amount);
+    reservedBalance = reservedBalance.subtract(amount);
     updatedAt = now;
   }
 
   /**
    * Applies an ordinary posting after validating status, ownership, funds, time and order.
    *
-   * <p>Entries must be applied in strictly increasing account sequence order. Gaps are
-   * permitted; sequence allocation and duplicate prevention across processes require SQL
-   * constraints and a lock or version check. A batch must first pass Transaction validation.
+   * <p>Entries must be applied in strictly increasing account sequence order. Gaps are permitted;
+   * sequence allocation and duplicate prevention across processes require SQL constraints and a
+   * lock or version check. A batch must first pass Transaction validation.
    */
   public void applyLedgerEntry(LedgerEntry entry, Instant now) {
     validateEntry(entry, now);
-      bookBalance = switch (entry.entryType()) {
-        case CREDIT -> {
-          assertCanCredit(entry.amount());
-          yield bookBalance.add(entry.amount());
-        }
-        case DEBIT -> {
-          assertCanDebit(entry.amount());
-          yield bookBalance.subtract(entry.amount());
-        }
-      };
+    bookBalance =
+        switch (entry.entryType()) {
+          case CREDIT -> {
+            assertCanCredit(entry.amount());
+            yield bookBalance.add(entry.amount());
+          }
+          case DEBIT -> {
+            assertCanDebit(entry.amount());
+            yield bookBalance.subtract(entry.amount());
+          }
+        };
     lastAppliedSequenceNumber = entry.sequenceNumber();
     updatedAt = now;
   }
@@ -159,9 +199,9 @@ public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
   /**
    * Captures reserved funds with a debit, updating book and reserved balances together.
    *
-   * <p>The command handler must validate the matching pending Hold, its wallet, exact
-   * amount and expiry, then persist Hold, Wallet, balanced postings and outbox in one
-   * transaction. This method alone does not authorize or identify a Hold.
+   * <p>The command handler must validate the matching pending Hold, its wallet, exact amount and
+   * expiry, then persist Hold, Wallet, balanced postings and outbox in one transaction. This method
+   * alone does not authorize or identify a Hold.
    */
   public void captureReservedFunds(LedgerEntry debitEntry, Instant now) {
     validateEntry(debitEntry, now);
@@ -187,15 +227,19 @@ public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
 
   /** Suspends debits, preserving any existing credit restriction. */
   public void suspendDebits(String reason, Instant now) {
-    WalletStatus target = status == WalletStatus.SUSPENDED_CREDIT || status == WalletStatus.FROZEN
-        ? WalletStatus.FROZEN : WalletStatus.SUSPENDED_DEBIT;
+    WalletStatus target =
+        status == WalletStatus.SUSPENDED_CREDIT || status == WalletStatus.FROZEN
+            ? WalletStatus.FROZEN
+            : WalletStatus.SUSPENDED_DEBIT;
     changeStatus(target, reason, now);
   }
 
   /** Suspends credits, preserving any existing debit restriction. */
   public void suspendCredits(String reason, Instant now) {
-    WalletStatus target = status == WalletStatus.SUSPENDED_DEBIT || status == WalletStatus.FROZEN
-        ? WalletStatus.FROZEN : WalletStatus.SUSPENDED_CREDIT;
+    WalletStatus target =
+        status == WalletStatus.SUSPENDED_DEBIT || status == WalletStatus.FROZEN
+            ? WalletStatus.FROZEN
+            : WalletStatus.SUSPENDED_CREDIT;
     changeStatus(target, reason, now);
   }
 
@@ -228,7 +272,8 @@ public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
       throw new InvalidWalletStateException("Duplicate or out-of-order ledger entry");
     }
     if (entry.timestamp().isBefore(createdAt) || entry.timestamp().isAfter(now)) {
-      throw new InvalidWalletStateException("Ledger entry timestamp is outside the allowed interval");
+      throw new InvalidWalletStateException(
+          "Ledger entry timestamp is outside the allowed interval");
     }
   }
 
@@ -281,23 +326,52 @@ public final class Wallet extends AggregateRoot<WalletId, DomainEvent> {
   }
 
   /** Returns the explicit ledger account identity, not a conversion of the wallet identity. */
-  public AccountId getAccountId() { return accountId; }
+  public AccountId getAccountId() {
+    return accountId;
+  }
+
   /** Returns the external owner reference. */
-  public UserId getUserId() { return userId; }
+  public UserId getUserId() {
+    return userId;
+  }
+
   /** Returns the wallet's single currency. */
-  public Currency getCurrency() { return currency; }
+  public Currency getCurrency() {
+    return currency;
+  }
+
   /** Returns the current operational state. */
-  public WalletStatus getStatus() { return status; }
+  public WalletStatus getStatus() {
+    return status;
+  }
+
   /** Returns the book balance, including reserved funds. */
-  public Money getBookBalance() { return bookBalance; }
+  public Money getBookBalance() {
+    return bookBalance;
+  }
+
   /** Returns the reserved part of the book balance. */
-  public Money getReservedBalance() { return reservedBalance; }
+  public Money getReservedBalance() {
+    return reservedBalance;
+  }
+
   /** Returns the loaded version for a repository compare-and-update; not a mutation count. */
-  public long getVersion() { return version; }
+  public long getVersion() {
+    return version;
+  }
+
   /** Returns the last applied sequence, or -1 before any entry has been applied. */
-  public long getLastAppliedSequenceNumber() { return lastAppliedSequenceNumber; }
+  public long getLastAppliedSequenceNumber() {
+    return lastAppliedSequenceNumber;
+  }
+
   /** Returns the immutable creation timestamp. */
-  public Instant getCreatedAt() { return createdAt; }
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
   /** Returns the time of the last effective state change. */
-  public Instant getUpdatedAt() { return updatedAt; }
+  public Instant getUpdatedAt() {
+    return updatedAt;
+  }
 }

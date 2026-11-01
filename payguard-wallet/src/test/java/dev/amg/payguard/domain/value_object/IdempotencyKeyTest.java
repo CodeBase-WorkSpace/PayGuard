@@ -1,10 +1,10 @@
 package dev.amg.payguard.domain.value_object;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import dev.amg.payguard.domain.exception.InvalidIdempotencyKeyException;
 import domain.InvalidDomainArgumentException;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /** Tests exact protocol validation and equality of idempotency keys. */
 class IdempotencyKeyTest {
@@ -30,8 +30,7 @@ class IdempotencyKeyTest {
   /** A key longer than the protocol limit must be rejected. */
   @Test
   void shouldRejectExcessiveLength() {
-    assertThrows(InvalidIdempotencyKeyException.class,
-        () -> IdempotencyKey.of("a".repeat(256)));
+    assertThrows(InvalidIdempotencyKeyException.class, () -> IdempotencyKey.of("a".repeat(256)));
   }
 
   /** Empty strings are not usable idempotency keys. */
@@ -49,29 +48,25 @@ class IdempotencyKeyTest {
   /** Leading and trailing whitespace is rejected rather than trimmed. */
   @Test
   void shouldRejectWhitespaceWithoutNormalization() {
-    assertThrows(InvalidIdempotencyKeyException.class,
-        () -> IdempotencyKey.of(" abc "));
+    assertThrows(InvalidIdempotencyKeyException.class, () -> IdempotencyKey.of(" abc "));
   }
 
   /** Control characters are not valid in a key used in an HTTP header. */
   @Test
   void shouldRejectControlCharacters() {
-    assertThrows(InvalidIdempotencyKeyException.class,
-        () -> IdempotencyKey.of("a\nb"));
+    assertThrows(InvalidIdempotencyKeyException.class, () -> IdempotencyKey.of("a\nb"));
   }
 
   /** Non-ASCII characters are rejected by the explicit Wallet API policy. */
   @Test
   void shouldRejectNonAscii() {
-    assertThrows(InvalidIdempotencyKeyException.class,
-        () -> IdempotencyKey.of("caf\u00e9"));
+    assertThrows(InvalidIdempotencyKeyException.class, () -> IdempotencyKey.of("caf\u00e9"));
   }
 
   /** Printable separators outside the allowed alphabet are rejected. */
   @Test
   void shouldRejectDisallowedPunctuation() {
-    assertThrows(InvalidIdempotencyKeyException.class,
-        () -> IdempotencyKey.of("order/42"));
+    assertThrows(InvalidIdempotencyKeyException.class, () -> IdempotencyKey.of("order/42"));
   }
 
   /** Case is significant for idempotency semantics. */

@@ -125,8 +125,8 @@ OTP key is missing, reconciliation fails rather than silently replacing that sta
 historical SQL and Flyway checksums unchanged. An incompatible history needs a separate reviewed
 forward migration; baseline/repair is deliberately not automatic.
 
-The replacement import retains the committed `identity_challenge`, `identity_audit_log`, and
-`identity_challenge_scope` tables. No old application data is
+The replacement import retains the committed `identity_otp`, `identity_audit_log`, and
+`identity_otp_scope` tables. No old application data is
 converted or rewritten during adoption.
 
 ## Fresh isolated environment
@@ -166,7 +166,7 @@ Build the committed service modules with JDK 25, then migrate each database expl
 This branch retains the existing module names and application persistence implementations:
 
 ```bash
-./mvnw -B -ntp -pl payguard-identity-service,payguard-wallet-service,payguard-loan-service,payguard-collateral-service -am package
+./mvnw -B -ntp -pl payguard-identity,payguard-wallet,payguard-loan,payguard-collateral -am package
 for service in identity wallet loan collateral; do
   docker compose run --rm --no-deps operations infrastructure/operations/migrate.yml -e service="$service"
 done
@@ -225,13 +225,38 @@ single-host deployment building block, not an HA database/Vault design. Deployme
 still requires live integration, security, recovery and business end-to-end checks. See the
 current validation report for executed checks and remaining acceptance work.
 
+## IDE database connections
+
+To publish only the four database ports on localhost, run from the repository root:
+
+```bash
+docker compose -f docker-compose.yaml -f infrastructure/compose.ide.yaml up -d --no-deps postgres-wallet postgres-loan postgres-collateral postgres-identity
+```
+
+Use the PostgreSQL driver, host `127.0.0.1`, schema `payguard`, and these defaults:
+
+| Service | Port | Database |
+| --- | --- | --- |
+| Wallet | 15431 | payguard_wallet |
+| Loan | 15432 | payguard_loan |
+| Collateral | 15433 | payguard_collateral |
+| Identity | 15434 | payguard_identity |
+
+For local administrative inspection, the username is `postgres` and each database's password is in `.local/payguard/<service>/admin-password`. This account has superuser privileges; do not use it in application configuration. Application credentials remain managed by Vault Agent.
+
+Enable SSL with mode `verify-full` and CA certificate `.local/payguard/ca.crt` (use an absolute path in the IDE). No client certificate or key is required. Server certificates must include `IP:127.0.0.1` in their subject alternative names; older installations with only container DNS names need their server certificates reissued with the same CA before using this host. Fresh preparation already includes localhost names.
+
+Override the ports with the `*_POSTGRES_PORT` settings from `.env.example`. The main Compose file alone keeps database ports private. The override reuses the existing external database volumes and does not initialize a replacement deployment.
+
+If a local `.local/payguard/ide-image.yaml` exists, it records the exact previously installed PostgreSQL image for this workstation. Add `-f .local/payguard/ide-image.yaml` after the IDE override and use `--pull never` to reuse that image when the project-pinned image cannot be downloaded. This local file is ignored by Git and does not change the normal deployment image.
+
 ## Identity import
 
 `import-identity.yml` replaces both the Python converter and Java import runner. Supply protected
 `source_file`, `mapping_file`, and `approved_mapping_sha256` variables in a protected variable file.
 The mapping JSON requires `approved_by`, `approval_reference`, `customers`, and `challenges`.
 Already-correct prefixed IDs pass through; historical IDs require explicit mappings. The source
-contains `challenges` and `audit` arrays. Audit records retain their `challenge_id` references.
+contains `challenges` and `audit` arrays. Historical audit `challenge_id` fields map to `otp_id` in the recovered schema.
 
 The native PostgreSQL transaction sets the stable owner, locks the destination, refuses populated
 challenge/audit/scope tables, binds JSON values as parameters, checks integer/timestamp inputs,

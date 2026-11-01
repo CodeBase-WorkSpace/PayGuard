@@ -1,10 +1,10 @@
 package dev.amg.payguard.domain.value_object;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import domain.InvalidDomainArgumentException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 /** Tests the immutable identifier contract of {@link HoldId}. */
 class HoldIdTest {
@@ -37,7 +37,8 @@ class HoldIdTest {
   /** Uppercase hexadecimal UUID input is allowed. */
   @Test
   void shouldAcceptUppercaseUuid() {
-    assertEquals(new HoldId(FIXED_ID),
+    assertEquals(
+        new HoldId(FIXED_ID),
         HoldId.fromString(FIXED_ID.toString().toUpperCase(java.util.Locale.ROOT)));
   }
 
@@ -79,8 +80,8 @@ class HoldIdTest {
   /** A different UUID must represent a different identifier. */
   @Test
   void shouldRejectDifferentUuidEquality() {
-    assertNotEquals(new HoldId(FIXED_ID),
-        new HoldId(UUID.fromString("123e4567-e89b-42d3-a456-426614174001")));
+    assertNotEquals(
+        new HoldId(FIXED_ID), new HoldId(UUID.fromString("123e4567-e89b-42d3-a456-426614174001")));
   }
 
   /** A different identifier type must never compare equal even with the same UUID. */

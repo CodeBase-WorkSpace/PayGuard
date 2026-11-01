@@ -14,11 +14,11 @@
     <modules>
         <module>payguard-shared</module>
         <module>payguard-proto</module>
-        <module>payguard-api-gateway</module>
-        <module>payguard-wallet-service</module>
-        <module>payguard-loan-service</module>
-        <module>payguard-collateral-service</module>
-        <module>payguard-identity-service</module>
+        <module>payguard-gateway</module>
+        <module>payguard-wallet</module>
+        <module>payguard-loan</module>
+        <module>payguard-collateral</module>
+        <module>payguard-identity</module>
     </modules>
 
     <properties>
@@ -28,7 +28,7 @@
         <spring-boot.version>4.1.1</spring-boot.version>
         <grpc.version>1.68.0</grpc.version>
         <protobuf.version>3.25.5</protobuf.version>
-        <jooq.version>3.19.15</jooq.version>
+        <jooq.version>3.21.7</jooq.version>
         <protobuf.maven.plugin.version>0.6.1</protobuf.maven.plugin.version>
         <os.maven.plugin.version>1.7.1</os.maven.plugin.version>
     </properties>
@@ -91,6 +91,10 @@
                         <includes>
                             <include>src/*/java/**/*.java</include>
                         </includes>
+
+                        <excludes>
+                            <exclude>**/jooq/generated/**/*.java</exclude>
+                        </excludes>
 
                         <googleJavaFormat>
                             <version>1.30.0</version>
@@ -155,7 +159,7 @@
                 <version>3.28.0</version>
 
                 <configuration>
-                    <targetJdk>21</targetJdk>
+                    <targetJdk>${java.version}</targetJdk>
                     <printFailingErrors>true</printFailingErrors>
                     <failOnViolation>true</failOnViolation>
                     <excludeRoots>

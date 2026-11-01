@@ -11,15 +11,15 @@
 **/__pycache__
 
 # Only the four packaged service JARs enter application build contexts.
-!payguard-identity-service/target/
-payguard-identity-service/target/*
-!payguard-identity-service/target/payguard-identity-service-1.0.0-SNAPSHOT.jar
-!payguard-wallet-service/target/
-payguard-wallet-service/target/*
-!payguard-wallet-service/target/payguard-wallet-service-1.0.0-SNAPSHOT.jar
-!payguard-loan-service/target/
-payguard-loan-service/target/*
-!payguard-loan-service/target/payguard-loan-service-1.0.0-SNAPSHOT.jar
-!payguard-collateral-service/target/
-payguard-collateral-service/target/*
-!payguard-collateral-service/target/payguard-collateral-service-1.0.0-SNAPSHOT.jar
+!payguard-identity/target/
+payguard-identity/target/*
+!payguard-identity/target/payguard-identity-1.0.0-SNAPSHOT.jar
+!payguard-wallet/target/
+payguard-wallet/target/*
+!payguard-wallet/target/payguard-wallet-1.0.0-SNAPSHOT.jar
+!payguard-loan/target/
+payguard-loan/target/*
+!payguard-loan/target/payguard-loan-1.0.0-SNAPSHOT.jar
+!payguard-collateral/target/
+payguard-collateral/target/*
+!payguard-collateral/target/payguard-collateral-1.0.0-SNAPSHOT.jar
