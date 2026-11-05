@@ -13,7 +13,7 @@ import java.util.Objects;
 public record OtpVerificationResponse(OtpId challengeId, OtpPurpose purpose, Instant verifiedAt) {
 
   public OtpVerificationResponse {
-    Objects.requireNonNull(challengeId, "otpId must not be null");
+    Objects.requireNonNull(challengeId, "challengeId must not be null");
     Objects.requireNonNull(purpose, "purpose must not be null");
     Objects.requireNonNull(verifiedAt, "verifiedAt must not be null");
   }

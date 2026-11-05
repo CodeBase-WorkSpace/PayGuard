@@ -17,6 +17,6 @@ public record OtpDeliveryRequest(
     String code) {
   @Override
   public String toString() {
-    return "OtpDeliveryRequest[otpId=" + otpId + ", code=[REDACTED]]";
+    return "OtpDeliveryRequest[challengeId=" + otpId + ", code=[REDACTED]]";
   }
 }

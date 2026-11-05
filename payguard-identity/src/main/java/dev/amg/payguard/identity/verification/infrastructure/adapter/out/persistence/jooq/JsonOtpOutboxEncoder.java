@@ -13,7 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 public final class JsonOtpOutboxEncoder implements OtpOutboxEncoder {
-  private static final String OTP_ID = "otpId";
+  private static final String OTP_ID = "challengeId";
   private static final String CUSTOMER_ID = "customerId";
   private static final String PURPOSE = "purpose";
   private static final String OCCURRED_ON = "occurredOn";
