@@ -21,6 +21,29 @@ Runtime credentials come from a service-scoped Vault AppRole and a rotating pool
 
 ## Verification and operations
 
+### jOOQ code generation
+
+The generator is configured in `build.gradle.kts`; no XML file is needed. Its plugin and
+runtime version share the `org-jooq` entry in the root `gradle/libs.versions.toml`, separately
+from the Spring Boot starter version.
+
+Generation reads `src/main/resources/db/jooq/*.sql` in Flyway filename order using jOOQ's
+`DDLDatabase`, preserving the former Maven profile. No running PostgreSQL instance or Vault
+credentials are needed. Ansible, Vault Agent and Flyway CLI continue to own provisioning,
+credentials and real database migrations separately.
+
+From the repository root:
+
+```bash
+./gradlew :payguard-identity:generateJooq
+```
+
+This explicitly refreshes the existing generated package under `src/main/java`, mapping the
+snapshot schema to `payguard`. Review generated changes before committing. Keep the snapshots
+consistent with `src/main/resources/db/migration/postgresql` when changing the database schema;
+generation does not inspect a live database or apply migrations. Normal compilation uses the
+checked-in generated classes and does not run generation.
+
 From the repository root, with JDK 25 and Docker:
 
 ```bash
