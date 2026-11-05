@@ -3,8 +3,13 @@
  */
 
 plugins {
+    alias(libs.plugins.boot.application)
     `java-library`
     `maven-publish`
+    checkstyle
+    pmd
+    alias(libs.plugins.spotless)
+    alias(libs.plugins.spotbugs)
     alias(libs.plugins.jooq.codegen)
 }
 
@@ -16,28 +21,20 @@ repositories {
 }
 
 dependencies {
-    api(libs.org.springframework.boot.spring.boot.starter.actuator)
-    api(libs.org.springframework.boot.spring.boot.starter.webmvc)
-    api(libs.org.springframework.boot.spring.boot.starter.validation)
-    api(libs.org.springframework.boot.spring.boot.starter.jooq)
     api(libs.org.jooq.jooq)
 
     jooqCodegen(libs.org.jooq.meta.extensions)
 
     api(libs.org.springframework.boot.spring.boot.starter.data.redis)
-    api(libs.org.springframework.boot.spring.boot.starter.kafka)
     api(libs.org.jspecify.jspecify)
-    api(libs.org.springframework.modulith.spring.modulith.starter.core)
     implementation(project(":payguard-shared"))
-    runtimeOnly(libs.org.postgresql.postgresql)
-    testImplementation(libs.org.springframework.boot.spring.boot.starter.flyway)
-    testImplementation(libs.org.flywaydb.flyway.database.postgresql)
-    testImplementation(libs.org.springframework.boot.spring.boot.starter.webmvc.test)
     testImplementation(libs.org.springframework.boot.spring.boot.starter.jooq.test)
-    testImplementation(libs.org.testcontainers.testcontainers.postgresql)
     testImplementation(libs.com.redis.testcontainers.redis)
-    testImplementation(libs.org.testcontainers.testcontainers.junit.jupiter)
-    testImplementation(libs.org.springframework.modulith.spring.modulith.starter.test)
+}
+
+val spotbugsAnnotations = configurations.detachedConfiguration(libs.jetbrains.annotations.get())
+tasks.withType<com.github.spotbugs.snom.SpotBugsTask>().configureEach {
+    auxClassPaths.from(spotbugsAnnotations)
 }
 
 group = "dev.amg.payguard"

@@ -3,8 +3,13 @@
  */
 
 plugins {
+    alias(libs.plugins.boot.application)
     `java-library`
     `maven-publish`
+    checkstyle
+    pmd
+    alias(libs.plugins.spotless)
+    alias(libs.plugins.spotbugs)
 }
 
 repositories {
@@ -17,14 +22,10 @@ repositories {
 dependencies {
     api(project(":payguard-proto"))
     implementation(libs.com.google.protobuf.protobuf.java.util)
-    api(libs.org.springframework.boot.spring.boot.starter.webmvc)
     api(libs.org.springframework.boot.spring.boot.starter.jackson)
-    api(libs.org.springframework.boot.spring.boot.starter.validation)
-    api(libs.org.springframework.boot.spring.boot.starter.actuator)
     api(libs.org.springframework.boot.spring.boot.starter.security)
     api(libs.org.springframework.boot.spring.boot.starter.oauth2.resource.server)
     api(libs.io.grpc.grpc.netty.shaded)
-    testImplementation(libs.org.springframework.boot.spring.boot.starter.webmvc.test)
     testImplementation(libs.org.springframework.security.spring.security.test)
 }
 

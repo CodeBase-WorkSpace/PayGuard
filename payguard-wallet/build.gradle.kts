@@ -3,8 +3,13 @@
  */
 
 plugins {
+    alias(libs.plugins.boot.application)
     `java-library`
     `maven-publish`
+    checkstyle
+    pmd
+    alias(libs.plugins.spotless)
+    alias(libs.plugins.spotbugs)
 }
 
 repositories {
@@ -15,18 +20,9 @@ repositories {
 }
 
 dependencies {
-    api(libs.org.springframework.boot.spring.boot.starter.actuator)
     api(libs.org.aspectj.aspectjweaver)
-    api(libs.org.springframework.boot.spring.boot.starter.webmvc)
-    api(libs.org.springframework.boot.spring.boot.starter.jooq)
     api(libs.org.springdoc.springdoc.openapi.starter.webmvc.ui)
-    api(libs.org.springframework.boot.spring.boot.starter.validation)
-    api(libs.org.springframework.modulith.spring.modulith.starter.core)
-    api(project(":payguard-shared"))
-    runtimeOnly(libs.org.postgresql.postgresql)
     runtimeOnly(libs.org.springframework.boot.spring.boot.devtools)
-    testImplementation(libs.org.springframework.boot.spring.boot.starter.webmvc.test)
-    testImplementation(libs.org.springframework.modulith.spring.modulith.starter.test)
 }
 
 group = "dev.amg.payguard"

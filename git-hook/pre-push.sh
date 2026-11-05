@@ -131,6 +131,11 @@ for index in "${!local_commits[@]}"; do
   # additional modifications sitting in the user's current working tree.
   git worktree add --detach "$checkout_directory" "$local_commit" >/dev/null
 
+  if [[ ! -f "$checkout_directory/build.gradle.kts" ]]; then
+    echo "ERROR: pushed commit $local_commit has no root build.gradle.kts. Commit the Gradle migration and workflow changes before pushing." >&2
+    exit 1
+  fi
+
   if [[ -z "$full_reason" ]]; then
     if [[ ! -f "$checkout_directory/settings.gradle.kts" && ! -f "$checkout_directory/settings.gradle" ]]; then
       full_reason="no root multi-project Gradle settings file"

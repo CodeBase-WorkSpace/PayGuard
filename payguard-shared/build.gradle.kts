@@ -5,6 +5,10 @@
 plugins {
     `java-library`
     `maven-publish`
+    checkstyle
+    pmd
+    alias(libs.plugins.spotless)
+    alias(libs.plugins.spotbugs)
 }
 
 repositories {
@@ -17,18 +21,13 @@ repositories {
 dependencies {
     api(libs.org.springframework.boot.spring.boot.starter.jdbc)
     api(libs.tools.jackson.core.jackson.databind)
-    api(libs.org.springframework.boot.spring.boot.starter.actuator)
     api(libs.org.springframework.kafka.spring.kafka)
     api(libs.org.slf4j.slf4j.api)
     api(libs.org.springframework.grpc.spring.grpc.core)
     api(libs.org.springframework.spring.context)
     api(libs.org.springframework.boot.spring.boot.autoconfigure)
     testImplementation(libs.org.flywaydb.flyway.core)
-    testImplementation(libs.org.flywaydb.flyway.database.postgresql)
     testImplementation(libs.org.junit.platform.junit.platform.console.standalone)
-    testImplementation(libs.org.springframework.boot.spring.boot.starter.test)
-    testImplementation(libs.org.testcontainers.testcontainers.postgresql)
-    testImplementation(libs.org.postgresql.postgresql)
 }
 
 group = "dev.amg.payguard"

@@ -23,7 +23,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-          cache: maven
+          cache: gradle
       - name: Install native Ansible dependencies and offline test dependencies
         run: |
           python3 -m venv /tmp/payguard-ansible
@@ -38,7 +38,7 @@ jobs:
       - name: Verify source contracts and build applications
         run: |
           python3 -m unittest discover -s infrastructure/tests -v
-          ./mvnw -B -ntp -pl payguard-identity,payguard-wallet,payguard-loan,payguard-collateral -am test package
+          bash ./gradlew --no-daemon --build-cache :payguard-identity:test :payguard-wallet:test :payguard-loan:test :payguard-collateral:test :payguard-identity:bootJar :payguard-wallet:bootJar :payguard-loan:bootJar :payguard-collateral:bootJar
       - name: Prepare isolated fixture and allocate only new explicit volumes
         run: |
           ansible-playbook -i localhost, -c local infrastructure/operations/prepare.yml -e fresh_target=true
@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: native-infrastructure-java-reports
-          path: '**/target/surefire-reports/TEST-*.xml'
+          path: '**/build/test-results/test/TEST-*.xml'
           if-no-files-found: warn
       - name: Stop only this isolated fixture
         if: always()

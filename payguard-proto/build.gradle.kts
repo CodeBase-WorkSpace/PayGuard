@@ -5,6 +5,10 @@
 plugins {
     `java-library`
     `maven-publish`
+    checkstyle
+    pmd
+    alias(libs.plugins.spotless)
+    alias(libs.plugins.spotbugs)
     alias(libs.plugins.protobuf)
 }
 
@@ -20,7 +24,6 @@ dependencies {
     api(libs.io.grpc.grpc.protobuf)
     api(libs.io.grpc.grpc.stub)
     api(libs.javax.annotation.javax.annotation.api)
-    testImplementation(libs.org.springframework.boot.spring.boot.starter.test)
 }
 
 group = "dev.amg.payguard"
@@ -45,12 +48,12 @@ tasks.withType<Javadoc>() {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:${libs.versions.com.google.protobuf.protobuf.java.asProvider().get()}"
+        artifact = libs.protobuf.protoc.get().toString()
     }
 
     plugins {
         create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.io.grpc.grpc.stub.get()}"
+            artifact = libs.grpc.protoc.gen.java.get().toString()
         }
     }
 

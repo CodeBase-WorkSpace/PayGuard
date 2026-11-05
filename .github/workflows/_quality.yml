@@ -20,28 +20,10 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: 'maven'
+          cache: 'gradle'
 
-      # 1. Spotless: Verifies code formatting without mutating the checkout
-      - name: Run Spotless
-        run: ./mvnw spotless:check
+      - name: Verify pre-push hook
+        run: python3 -m unittest discover -s git-hook -p 'test_*.py' -v
 
-      # 2. CheckStyle: Enforces coding standards
-      - name: Run CheckStyle
-        run: ./mvnw checkstyle:check
-
-      # Install reactor modules so independent analysis invocations can resolve local artifacts.
-      - name: Install Maven Modules
-        run: ./mvnw -DskipTests -Dpmd.skip=true -Dspotbugs.skip=true install
-
-      # 3. PMD: Scans for programming flaws
-      - name: Run PMD
-        run: ./mvnw pmd:check
-
-      # 4. SpotBugs: Looks for bugs in Java bytecode
-      - name: Run SpotBugs
-        run: ./mvnw spotbugs:check
-
-      # 5. Unit Tests: Ensures the core domain logic is intact
-      - name: Run Unit Tests
-        run: ./mvnw clean verify
+      - name: Run formatting, static analysis, and tests
+        run: bash ./gradlew --no-daemon --build-cache check

@@ -12,27 +12,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v6
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Compile and Package (Skip Tests)
-        # Tests are skipped because they already passed in the _quality workflow
-        run: ./mvnw clean package -DskipTests
-
-      - name: Install Maven Modules for Image Builds
-        # Image builds run as separate Maven invocations and need reactor artifacts in the local repository.
-        run: ./mvnw -DskipTests -Dpmd.skip=true -Dspotbugs.skip=true install
-
-      - name: Verify Spring Boot plugin resolution
-        run: |
-          ./mvnw -version
-          ./mvnw help:effective-pom -pl payguard-wallet \
-            | grep -A8 -B2 spring-boot-maven-plugin
-
       - name: Build Wallet Service Image
         run: docker build -f payguard-wallet/Dockerfile -t payguard/wallet-service:${{ github.sha }} .
 

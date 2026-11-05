@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class IdentityApp {
 
-    void main() {
-    SpringApplication.run(dev.amg.payguard.identity.IdentityApp.class);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(IdentityApp.class, args);
+    }
 }
