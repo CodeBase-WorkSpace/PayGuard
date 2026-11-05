@@ -148,6 +148,34 @@ public class IdentityOutboxRecord extends UpdatableRecordImpl<IdentityOutboxReco
         return (Integer) get(8);
     }
 
+    /**
+     * Setter for <code>payguard.identity_outbox.claimed_by</code>.
+     */
+    public void setClaimedBy(UUID value) {
+        set(9, value);
+    }
+
+    /**
+     * Getter for <code>payguard.identity_outbox.claimed_by</code>.
+     */
+    public UUID getClaimedBy() {
+        return (UUID) get(9);
+    }
+
+    /**
+     * Setter for <code>payguard.identity_outbox.claim_until</code>.
+     */
+    public void setClaimUntil(OffsetDateTime value) {
+        set(10, value);
+    }
+
+    /**
+     * Getter for <code>payguard.identity_outbox.claim_until</code>.
+     */
+    public OffsetDateTime getClaimUntil() {
+        return (OffsetDateTime) get(10);
+    }
+
     // -------------------------------------------------------------------------
     // Primary key information
     // -------------------------------------------------------------------------
@@ -171,7 +199,7 @@ public class IdentityOutboxRecord extends UpdatableRecordImpl<IdentityOutboxReco
     /**
      * Create a detached, initialised IdentityOutboxRecord
      */
-    public IdentityOutboxRecord(UUID eventId, String aggregateId, String eventType, JSON payload, OffsetDateTime occurredAt, OffsetDateTime createdAt, OffsetDateTime publishedAt, OffsetDateTime nextAttemptAt, Integer attemptCount) {
+    public IdentityOutboxRecord(UUID eventId, String aggregateId, String eventType, JSON payload, OffsetDateTime occurredAt, OffsetDateTime createdAt, OffsetDateTime publishedAt, OffsetDateTime nextAttemptAt, Integer attemptCount, UUID claimedBy, OffsetDateTime claimUntil) {
         super(IdentityOutbox.IDENTITY_OUTBOX);
 
         setEventId(eventId);
@@ -183,6 +211,8 @@ public class IdentityOutboxRecord extends UpdatableRecordImpl<IdentityOutboxReco
         setPublishedAt(publishedAt);
         setNextAttemptAt(nextAttemptAt);
         setAttemptCount(attemptCount);
+        setClaimedBy(claimedBy);
+        setClaimUntil(claimUntil);
         resetTouchedOnNotNull();
     }
 }

@@ -9,9 +9,10 @@ import java.time.Instant;
  * context is currently supplied by the inbound contract.
  */
 public record VerificationAuditEntry(
-    OtpId challengeId,
-    CustomerId customerId,
-    VerificationAuditAction verificationAuditAction,
-    String reasonCode,
-    String sourceIp,
-    Instant occurredAt) {}
+        OtpId challengeId, // The generated OTP.
+        CustomerId customerId, // The person that OTP generated for
+        VerificationAuditAction verificationAuditAction, // What action happened to the OTP?
+        String reasonCode, // Code that identifies why an OTP was requested, generated, or validated.
+        String sourceIp, // IP address from which the OTP request originated.
+        Instant occurredAt
+) {}
