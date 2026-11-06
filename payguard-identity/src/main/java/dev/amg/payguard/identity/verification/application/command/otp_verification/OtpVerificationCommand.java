@@ -17,7 +17,7 @@ public record OtpVerificationCommand(
     String sourceIp) {
 
   public OtpVerificationCommand {
-    requirePresent(otpId, "otpId");
+    requirePresent(otpId, "challengeId");
     requirePresent(customerId, "customerId");
     requirePresent(purpose, "purpose");
 
@@ -52,7 +52,7 @@ public record OtpVerificationCommand(
 
   @Override
   public String toString() {
-    return "OtpVerificationCommand[otpId="
+    return "OtpVerificationCommand[challengeId="
         + otpId
         + ", code=[REDACTED], deviceFingerprint=[REDACTED], sourceIp=[REDACTED]]";
   }

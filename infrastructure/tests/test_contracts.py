@@ -5,7 +5,6 @@ import json
 import re
 import tomllib
 import unittest
-import xml.etree.ElementTree as ET
 import yaml
 import hcl2
 
@@ -115,11 +114,13 @@ class DeploymentContracts(unittest.TestCase):
         for endpoint in ["auth/approle/login", "auth/token/renew-self", "auth/token/revoke-self", "sys/leases"]:
             self.assertNotIn(endpoint, client)
 
-    def test_parent_reactor_modules_exist(self):
-        ns = {"m": "http://maven.apache.org/POM/4.0.0"}
-        root = ET.parse(ROOT / "pom.xml").getroot()
-        for node in root.findall("m:modules/m:module", ns):
-            self.assertTrue((ROOT / node.text / "pom.xml").is_file())
+    def test_gradle_modules_exist(self):
+        settings = (ROOT / "settings.gradle.kts").read_text()
+        modules = re.findall(r'^\s*include\(":([^\"]+)"\)\s*$', settings, re.MULTILINE)
+        self.assertTrue(modules, "No Gradle modules found in settings.gradle.kts")
+        for module in modules:
+            with self.subTest(module=module):
+                self.assertTrue((ROOT / module / "build.gradle.kts").is_file())
 
     def test_production_brokers_require_authentication_tls_and_hostname_checks(self):
         class Loader(yaml.SafeLoader):

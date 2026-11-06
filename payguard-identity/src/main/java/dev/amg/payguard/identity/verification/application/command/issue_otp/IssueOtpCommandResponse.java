@@ -15,7 +15,7 @@ public record IssueOtpCommandResponse(
     String sourceIp,
     Instant expiresAt) {
   public IssueOtpCommandResponse {
-    Objects.requireNonNull(otpId, "otpId must not be null");
+    Objects.requireNonNull(otpId, "challengeId must not be null");
     Objects.requireNonNull(purpose, "purpose must not be null");
     Objects.requireNonNull(channel, "channel must not be null");
     Objects.requireNonNull(expiresAt, "expiresAt must not be null");

@@ -6,8 +6,10 @@ import dev.amg.payguard.identity.verification.domain.enums.OtpChannel;
 import dev.amg.payguard.identity.verification.domain.enums.OtpPurpose;
 import dev.amg.payguard.identity.verification.domain.enums.OtpVerificationResult;
 import java.time.Instant;
+import java.util.UUID;
 
 public record OtpEvent(
+    UUID id,
     String type,
     OtpId challengeId,
     CustomerId customerId,

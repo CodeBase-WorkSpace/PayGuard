@@ -13,7 +13,7 @@ public record OtpLockedEvent(
     implements DomainEvent {
 
   public OtpLockedEvent {
-    Objects.requireNonNull(otpId, "otpId must not be null");
+    Objects.requireNonNull(otpId, "challengeId must not be null");
     Objects.requireNonNull(customerId, "customerId must not be null");
     Objects.requireNonNull(purpose, "purpose must not be null");
     Objects.requireNonNull(occurredOn, "occurredOn must not be null");

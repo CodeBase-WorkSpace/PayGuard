@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public sealed interface OtpChannel permits OtpChannel.Sms, OtpChannel.Email, OtpChannel.Push {
   OtpChannel SMS = new Sms();
   OtpChannel EMAIL = new Email();
-  OtpChannel PUSH = new Push();
+  OtpChannel PUSH_NOTIFICATION = new Push();
 
   @JsonValue
   String name();
@@ -16,7 +16,7 @@ public sealed interface OtpChannel permits OtpChannel.Sms, OtpChannel.Email, Otp
     return switch (name) {
       case "SMS" -> SMS;
       case "EMAIL" -> EMAIL;
-      case "PUSH" -> PUSH;
+      case "PUSH" -> PUSH_NOTIFICATION;
       default -> throw new IllegalArgumentException("Unknown OtpChannel: " + name);
     };
   }
