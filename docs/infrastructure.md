@@ -166,7 +166,7 @@ Build the committed service modules with JDK 25, then migrate each database expl
 This branch retains the existing module names and application persistence implementations:
 
 ```bash
-./mvnw -B -ntp -pl payguard-identity,payguard-wallet,payguard-loan,payguard-collateral -am package
+bash ./gradlew --build-cache :payguard-identity:bootJar :payguard-wallet:bootJar :payguard-loan:bootJar :payguard-collateral:bootJar
 for service in identity wallet loan collateral; do
   docker compose run --rm --no-deps operations infrastructure/operations/migrate.yml -e service="$service"
 done

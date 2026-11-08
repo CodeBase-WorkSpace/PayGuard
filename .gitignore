@@ -5,6 +5,8 @@
 
 # Generated build output
 target/
+build/
+.gradle/
 
 # Local workflow guidance
 GIT_WORKFLOW_CONVENTION.md

@@ -5,14 +5,14 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 public sealed interface OtpPurpose
     permits OtpPurpose.Login,
-        OtpPurpose.TransferConfirm,
-        OtpPurpose.LoanDisburse,
+        OtpPurpose.TransferConfirmation,
+        OtpPurpose.LoanDisbursement,
         OtpPurpose.CollateralRelease,
         OtpPurpose.CardIssuance,
         OtpPurpose.ProfileChange {
   OtpPurpose LOGIN = new Login();
-  OtpPurpose TRANSFER_CONFIRM = new TransferConfirm();
-  OtpPurpose LOAN_DISBURSE = new LoanDisburse();
+  OtpPurpose TRANSFER_CONFIRM = new TransferConfirmation();
+  OtpPurpose LOAN_DISBURSE = new LoanDisbursement();
   OtpPurpose COLLATERAL_RELEASE = new CollateralRelease();
   OtpPurpose CARD_ISSUANCE = new CardIssuance();
   OtpPurpose PROFILE_CHANGE = new ProfileChange();
@@ -47,8 +47,8 @@ public sealed interface OtpPurpose
     }
   }
 
-  final class TransferConfirm implements OtpPurpose {
-    private TransferConfirm() {}
+  final class TransferConfirmation implements OtpPurpose {
+    private TransferConfirmation() {}
 
     @Override
     public String name() {
@@ -61,8 +61,8 @@ public sealed interface OtpPurpose
     }
   }
 
-  final class LoanDisburse implements OtpPurpose {
-    private LoanDisburse() {}
+  final class LoanDisbursement implements OtpPurpose {
+    private LoanDisbursement() {}
 
     @Override
     public String name() {

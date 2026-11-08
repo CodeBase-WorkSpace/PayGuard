@@ -14,6 +14,7 @@ jobs:
       PAYGUARD_POSTGRES_WALLET_VOLUME: payguard-it-ci_wallet
       PAYGUARD_POSTGRES_LOAN_VOLUME: payguard-it-ci_loan
       PAYGUARD_POSTGRES_COLLATERAL_VOLUME: payguard-it-ci_collateral
+      PAYGUARD_POSTGRES_EVIDENCE_VOLUME: payguard-it-ci_evidence
       PAYGUARD_VAULT_DATA_VOLUME: payguard-it-ci_vault
       PAYGUARD_VAULT_AUDIT_VOLUME: payguard-it-ci_audit
       PAYGUARD_KAFKA_DATA_VOLUME: payguard-it-ci_kafka
@@ -23,7 +24,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-          cache: maven
+          cache: gradle
       - name: Install native Ansible dependencies and offline test dependencies
         run: |
           python3 -m venv /tmp/payguard-ansible
@@ -38,23 +39,23 @@ jobs:
       - name: Verify source contracts and build applications
         run: |
           python3 -m unittest discover -s infrastructure/tests -v
-          ./mvnw -B -ntp -pl payguard-identity,payguard-wallet,payguard-loan,payguard-collateral -am test package
+          bash ./gradlew --no-daemon --build-cache :payguard-identity:test :payguard-wallet:test :payguard-loan:test :payguard-collateral:test :payguard-identity:bootJar :payguard-wallet:bootJar :payguard-loan:bootJar :payguard-collateral:bootJar
       - name: Prepare isolated fixture and allocate only new explicit volumes
         run: |
           ansible-playbook -i localhost, -c local infrastructure/operations/prepare.yml -e fresh_target=true
           ansible-playbook -i localhost, -c local infrastructure/operations/allocate.yml -e fresh_target=true
           docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml --profile operations build operations
-          docker compose up -d --wait postgres-identity postgres-wallet postgres-loan postgres-collateral
+          docker compose up -d --wait postgres-identity postgres-wallet postgres-loan postgres-collateral postgres-evidence
           docker compose up -d vault
       - name: Initialize and provision the new fixture through Ansible
         run: |
           docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/vault-lifecycle.yml -e operation=initialize -e fresh_target=true -e local_rehearsal=true
           docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/site.yml -e fresh_target=true
           docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml up -d agent-operator
-      - name: Run all four CLI migrations twice
+      - name: Run all five CLI migrations twice
         run: |
           for pass in 1 2; do
-            for service in identity wallet loan collateral; do
+            for service in identity wallet loan collateral evidence; do
               docker compose -f docker-compose.yaml -f infrastructure/compose.operations.yaml run --rm --no-deps operations infrastructure/operations/migrate.yml -e service="$service"
             done
           done
@@ -73,7 +74,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: native-infrastructure-java-reports
-          path: '**/target/surefire-reports/TEST-*.xml'
+          path: '**/build/test-results/test/TEST-*.xml'
           if-no-files-found: warn
       - name: Stop only this isolated fixture
         if: always()

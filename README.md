@@ -27,7 +27,7 @@ First clone the repository and build it:
 ```bash
 git clone https://github.com/<your-org>/payguard.git
 cd payguard
-./mvnw -B -ntp clean verify
+bash ./gradlew --build-cache build
 ```
 
 Then start the infrastructure (PostgreSQL and Vault) and the applications:
@@ -209,14 +209,22 @@ Each service is an independently deployable module.
 
 ## Requirements
 
-PayGuard runs on the JVM. Use JDK **25**, Docker and Compose, Ansible and OpenSSL. The Maven wrapper is included.
+PayGuard runs on the JVM. Use JDK **25**, Docker and Compose, Ansible and OpenSSL. The Gradle wrapper is included.
 Database integration tests start real PostgreSQL containers.
 
 ## Build and local rehearsal
 
 ```bash
-./mvnw -B -ntp clean verify
+bash ./gradlew --build-cache build
 ```
+
+Install the repository's pre-push hook once:
+
+```bash
+bash git-hook/install.sh
+```
+
+The hook validates committed changes. Commit build and workflow changes before pushing.
 
 For the Compose, Vault Agent, Ansible and Flyway CLI deployment,
 follow [the infrastructure runbook](docs/infrastructure.md).

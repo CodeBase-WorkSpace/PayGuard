@@ -103,6 +103,16 @@ public class IdentityOutbox extends TableImpl<IdentityOutboxRecord> {
      */
     public final TableField<IdentityOutboxRecord, Integer> ATTEMPT_COUNT = createField(DSL.name("attempt_count"), SQLDataType.INTEGER.nullable(false).defaultValue(DSL.field(DSL.raw("0"), SQLDataType.INTEGER)), this, "");
 
+    /**
+     * The column <code>payguard.identity_outbox.claimed_by</code>.
+     */
+    public final TableField<IdentityOutboxRecord, UUID> CLAIMED_BY = createField(DSL.name("claimed_by"), SQLDataType.UUID, this, "");
+
+    /**
+     * The column <code>payguard.identity_outbox.claim_until</code>.
+     */
+    public final TableField<IdentityOutboxRecord, OffsetDateTime> CLAIM_UNTIL = createField(DSL.name("claim_until"), SQLDataType.TIMESTAMPWITHTIMEZONE(6), this, "");
+
     private IdentityOutbox(Name alias, Table<IdentityOutboxRecord> aliased) {
         this(alias, aliased, (Field<?>[]) null, null);
     }

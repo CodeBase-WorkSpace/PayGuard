@@ -29,9 +29,9 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
-          build-mode: autobuild
+          build-mode: automobiled
 
-      - name: Autobuild
+      - name: Auto build
         if: ${{ env.ACT != 'true' }}
         uses: github/codeql-action/autobuild@v4
 
